@@ -31,7 +31,7 @@ class QuantSplit_Base(abc.ABC):
 
     def reset(self, k):
         self.split_idx = []
-        self.k = k + 1
+        self.k = k
 
     def split(self, df, inv_col='investment_id', time_col='time_id'):
         """
@@ -47,8 +47,8 @@ class QuantSplit_Base(abc.ABC):
     def get_folder(self, df, x_column, y_column, folder_idx):
         """
         :param df: the target DataFrame
-        :param x_column: the column of X, list
-        :param y_column: the column of y, list
+        :param x_column: the column idx of X, list
+        :param y_column: the column idx of y, list
         :param folder_idx: the idx of folder, 0 <= folder_idx < k
         :return: numpy, xtrain, ytrain, xval, yval
         """
@@ -105,6 +105,7 @@ class QuantTimeSplit_SeqHorizon(QuantSplit_Base):
         super(QuantTimeSplit_SeqHorizon, self).__init__(k)
 
     def split(self, df, inv_col='investment_id', time_col='time_id'):
+        self.clear()
         kk = self.k + 1
         self._split_time_seq(df, kk, inv_col, time_col)
         for i in range(self.k):
@@ -129,6 +130,7 @@ class QuantTimeSplit_SeqPast(QuantSplit_Base):
         super(QuantTimeSplit_SeqPast, self).__init__(k)
 
     def split(self, df, inv_col='investment_id', time_col='time_id'):
+        self.clear()
         kk = self.k + 1
         self._split_time_seq(df, kk, inv_col, time_col)
         for i in range(self.k):
@@ -156,6 +158,7 @@ class QuantTimeSplit_GroupTime(QuantSplit_Base):
         self.group_index = None
 
     def split(self, df, inv_col='investment_id', time_col='time_id'):
+        self.clear()
         kk = self.k
         self._split_time_seq(df, kk, inv_col, time_col)
         group_index_list = []
@@ -192,12 +195,13 @@ class QuantTimeSplit_PurgeSeqHorizon(QuantSplit_Base):
         return self.gap
 
     def split(self, df, inv_col='investment_id', time_col='time_id'):
+        self.clear()
         kk = self.k + self.gap + 1
         self._split_time_seq(df, kk, inv_col, time_col)
         for i in range(self.k):
             idx_train = df[(df[time_col] >= self.seq_time[i]) & (df[time_col] < self.seq_time[i + 1])].index
             idx_val = df[(df[time_col] >= self.seq_time[i + 1 + self.gap]) & (
-                        df[time_col] < self.seq_time[i + 2 + self.gap])].index
+                    df[time_col] < self.seq_time[i + 2 + self.gap])].index
             self.split_idx.append((idx_train, idx_val))
 
 
@@ -221,12 +225,13 @@ class QuantTimeSplit_PurgeSeqPast(QuantSplit_Base):
         return self.gap
 
     def split(self, df, inv_col='investment_id', time_col='time_id'):
+        self.clear()
         kk = self.k + self.gap + 1
         self._split_time_seq(df, kk, inv_col, time_col)
         for i in range(self.k):
             idx_train = df[(df[time_col] >= self.seq_time[0]) & (df[time_col] < self.seq_time[i + 1])].index
             idx_val = df[(df[time_col] >= self.seq_time[i + 1 + self.gap]) & (
-                        df[time_col] < self.seq_time[i + 2 + self.gap])].index
+                    df[time_col] < self.seq_time[i + 2 + self.gap])].index
             self.split_idx.append((idx_train, idx_val))
 
 
@@ -256,6 +261,7 @@ class QuantTimeSplit_PurgeGroupTime(QuantSplit_Base):
         return self.gap
 
     def split(self, df, inv_col='investment_id', time_col='time_id'):
+        self.clear()
         kk = self.k
         self._split_time_seq(df, kk, inv_col, time_col)
         for i in range(0, self.k):
@@ -272,7 +278,7 @@ class QuantTimeSplit_PurgeGroupTime(QuantSplit_Base):
 
 """
     Introduction of QuantTimeSplit For DataFrame.
-    
+
     The Input DataFrame:
                 investment_id  time_id factor[0:m1] target[0:m2]
         idx_0                     |
@@ -280,7 +286,7 @@ class QuantTimeSplit_PurgeGroupTime(QuantSplit_Base):
         ...                       |
         idx_n                     |
                             validation split
-                            
+
     # fsplit = QuantTimeSplit_SeqHorizon(k=3)   # sequence with fixed horizon(folder), k+1 split-block
     # fsplit = QuantTimeSplit_SeqPast(k=3)      # sequence with past-folder, k+1 split-block
     # fsplit = QuantTimeSplit_GroupTime(k=4)    # group split on time dimension with k folder, k split-block
@@ -289,10 +295,10 @@ class QuantTimeSplit_PurgeGroupTime(QuantSplit_Base):
     # fsplit = QuantTimeSplit_PurgeGroupTime(k=4, gap=1)   # group split on time with k folder and gap, k split-block
 
     API:
-    fsplit.split(df)  # split the data (get the index)
+    fsplit.split(df, inv_col, time_col)  # split the data (get the index) with time columns
     fsplit.get_folder_idx(folder_idx)  # get the dataframe-idx of one folder, return (index_train, index_val)
     xtr, ytr, xvl, yvl = fsplit.get_folder(df, x_column, y_column, fidx)  # get the train & validation data, numpy
-    
+
     fsplit.get_seq_time()  # get the split sequence on time-stamps-cluster.
     fsplit.get_k()
     fsplit.get_gap()

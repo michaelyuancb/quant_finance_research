@@ -52,6 +52,14 @@ class CCCLoss(nn.Module):
         return -ccc  # -ccc
 
 
+def evaluate_mse(pred, label):
+    return np.mean((pred - label)**2)
+
+
+def evaluate_rmse(pred, label):
+    return np.sqrt(evaluate_mse(pred, label))
+
+
 def evaluate_build(pred, label, time_id):
     df_tmp = pd.DataFrame(np.stack((time_id, pred, label), axis=1))
     return df_tmp
