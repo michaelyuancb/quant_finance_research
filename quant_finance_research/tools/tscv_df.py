@@ -2,6 +2,7 @@ import abc
 
 import pandas as pd
 import numpy as np
+from datetime import datetime
 
 from sklearn.model_selection import GroupKFold
 
@@ -71,8 +72,7 @@ class QuantSplit_Base(abc.ABC):
 
     def _split_time_seq(self, df, kk, inv_col='investment_id', time_col='time_id'):
         time_idx = df[time_col].values
-        time_idx = np.unique(time_idx).tolist()
-        time_idx = list(set(time_idx))
+        time_idx = np.sort(np.unique(time_idx))
         n_time_idx = len(time_idx)
         seq_time = [n_time_idx // kk] * kk
         if seq_time[0] == 0:
@@ -83,7 +83,8 @@ class QuantSplit_Base(abc.ABC):
         seq_time = [0] + seq_time
         for j in range(kk):
             seq_time[j + 1] = seq_time[j + 1] + seq_time[j]
-        self.seq_time = seq_time
+        self.seq_time = [time_idx[seq_time[i]] for i in range(0, len(seq_time)-1)] + ['+inf_time']
+        # Notice that the last item (seq_time[kk], the (kk+1)th) is a string, which can not be compared with others.
 
     def get_seq_time(self):
         return self.seq_time
@@ -110,7 +111,10 @@ class QuantTimeSplit_SeqHorizon(QuantSplit_Base):
         self._split_time_seq(df, kk, inv_col, time_col)
         for i in range(self.k):
             idx_train = df[(df[time_col] >= self.seq_time[i]) & (df[time_col] < self.seq_time[i + 1])].index
-            idx_val = df[(df[time_col] >= self.seq_time[i + 1]) & (df[time_col] < self.seq_time[i + 2])].index
+            if i != self.k-1:
+                idx_val = df[(df[time_col] >= self.seq_time[i + 1]) & (df[time_col] < self.seq_time[i + 2])].index
+            else:
+                idx_val = df[(df[time_col] >= self.seq_time[i + 1])].index
             self.split_idx.append((idx_train, idx_val))
 
 
@@ -135,7 +139,10 @@ class QuantTimeSplit_SeqPast(QuantSplit_Base):
         self._split_time_seq(df, kk, inv_col, time_col)
         for i in range(self.k):
             idx_train = df[(df[time_col] >= self.seq_time[0]) & (df[time_col] < self.seq_time[i + 1])].index
-            idx_val = df[(df[time_col] >= self.seq_time[i + 1]) & (df[time_col] < self.seq_time[i + 2])].index
+            if i != self.k-1:
+                idx_val = df[(df[time_col] >= self.seq_time[i + 1]) & (df[time_col] < self.seq_time[i + 2])].index
+            else:
+                idx_val = df[(df[time_col] >= self.seq_time[i + 1])].index
             self.split_idx.append((idx_train, idx_val))
 
 
@@ -163,9 +170,13 @@ class QuantTimeSplit_GroupTime(QuantSplit_Base):
         self._split_time_seq(df, kk, inv_col, time_col)
         group_index_list = []
         for i in range(self.k):
-            idx_v = df[(df[time_col] >= self.seq_time[i]) & (df[time_col] < self.seq_time[i + 1])].index
+            if i != self.k-1:
+                idx_v = df[(df[time_col] >= self.seq_time[i]) & (df[time_col] < self.seq_time[i + 1])].index
+            else:
+                idx_v = df[(df[time_col] >= self.seq_time[i])].index
             group_index_list.append(idx_v)
         group_index = np.zeros(df.shape[0])
+        # print(group_index_list)
         for i in range(self.k):
             group_index[group_index_list[i]] = i
         self.group_index = group_index
@@ -190,6 +201,8 @@ class QuantTimeSplit_PurgeSeqHorizon(QuantSplit_Base):
         """
         super(QuantTimeSplit_PurgeSeqHorizon, self).__init__(k)
         self.gap = gap
+        if gap < 1:
+            raise ValueError(f"The gap should be larger than 0, but now get {gap}.")
 
     def get_gap(self):
         return self.gap
@@ -200,8 +213,11 @@ class QuantTimeSplit_PurgeSeqHorizon(QuantSplit_Base):
         self._split_time_seq(df, kk, inv_col, time_col)
         for i in range(self.k):
             idx_train = df[(df[time_col] >= self.seq_time[i]) & (df[time_col] < self.seq_time[i + 1])].index
-            idx_val = df[(df[time_col] >= self.seq_time[i + 1 + self.gap]) & (
-                    df[time_col] < self.seq_time[i + 2 + self.gap])].index
+            if i != self.k-1:
+                idx_val = df[(df[time_col] >= self.seq_time[i + 1 + self.gap]) & (
+                        df[time_col] < self.seq_time[i + 2 + self.gap])].index
+            else:
+                idx_val = df[(df[time_col] >= self.seq_time[i + 1 + self.gap])].index
             self.split_idx.append((idx_train, idx_val))
 
 
@@ -220,6 +236,8 @@ class QuantTimeSplit_PurgeSeqPast(QuantSplit_Base):
         """
         super(QuantTimeSplit_PurgeSeqPast, self).__init__(k)
         self.gap = gap
+        if gap < 1:
+            raise ValueError(f"The gap should be larger than 0, but now get {gap}.")
 
     def get_gap(self):
         return self.gap
@@ -230,8 +248,11 @@ class QuantTimeSplit_PurgeSeqPast(QuantSplit_Base):
         self._split_time_seq(df, kk, inv_col, time_col)
         for i in range(self.k):
             idx_train = df[(df[time_col] >= self.seq_time[0]) & (df[time_col] < self.seq_time[i + 1])].index
-            idx_val = df[(df[time_col] >= self.seq_time[i + 1 + self.gap]) & (
-                    df[time_col] < self.seq_time[i + 2 + self.gap])].index
+            if i != self.k-1:
+                idx_val = df[(df[time_col] >= self.seq_time[i + 1 + self.gap]) & (
+                        df[time_col] < self.seq_time[i + 2 + self.gap])].index
+            else:
+                idx_val = df[(df[time_col] >= self.seq_time[i + 1 + self.gap])].index
             self.split_idx.append((idx_train, idx_val))
 
 
@@ -256,6 +277,8 @@ class QuantTimeSplit_PurgeGroupTime(QuantSplit_Base):
         if 2 * self.gap + 1 >= self.k:
             # at least one block for training folder.
             raise ValueError("The gap is to big for split, need 2*gap+1 < k.")
+        if gap < 1:
+            raise ValueError(f"The gap should be larger than 0, but now get {gap}.")
 
     def get_gap(self):
         return self.gap
@@ -265,12 +288,15 @@ class QuantTimeSplit_PurgeGroupTime(QuantSplit_Base):
         kk = self.k
         self._split_time_seq(df, kk, inv_col, time_col)
         for i in range(0, self.k):
-            idx_val = df[(df[time_col] >= self.seq_time[i]) & (df[time_col] < self.seq_time[i + 1])].index
+            if i != self.k-1:
+                idx_val = df[(df[time_col] >= self.seq_time[i]) & (df[time_col] < self.seq_time[i + 1])].index
+            else:
+                idx_val = df[(df[time_col] >= self.seq_time[i])].index
             df_idx_train = None
             if i - self.gap - 1 >= 0:
                 df_idx_train = (df[time_col] >= self.seq_time[0]) & (df[time_col] < self.seq_time[i - self.gap])
             if i + self.gap + 1 < self.k:
-                df_tmp = (df[time_col] >= self.seq_time[i + self.gap + 1]) & (df[time_col] < self.seq_time[self.k])
+                df_tmp = (df[time_col] >= self.seq_time[i + self.gap + 1])
                 df_idx_train = df_tmp if df_idx_train is None else df_idx_train | df_tmp
             idx_train = df[df_idx_train].index
             self.split_idx.append((idx_train, idx_val))
@@ -308,21 +334,36 @@ if __name__ == "__main__":
     v = np.array([[0, 0, 1, 2], [0, 1, 3, 2], [2, 0, 4, 5], [1, 2, 3, 3], [1, 0, 0, 5], [2, 1, 0, 3],
                   [2, 3, 1, 1], [0, 3, 2, 1], [1, 3, 4, 0], [2, 3, 4, 1], [0, 4, 0, 1], [1, 4, 4, 1]])
     v[:, 0] = v[:, 1]
+    dt = [
+        datetime.strptime("2022-11-1", "%Y-%m-%d"),
+        datetime.strptime("2022-11-2", "%Y-%m-%d"),
+        datetime.strptime("2022-11-1", "%Y-%m-%d"),
+        datetime.strptime("2022-11-3", "%Y-%m-%d"),
+        datetime.strptime("2022-11-1", "%Y-%m-%d"),
+        datetime.strptime("2022-11-2", "%Y-%m-%d"),
+        datetime.strptime("2022-11-4", "%Y-%m-%d"),
+        datetime.strptime("2022-11-4", "%Y-%m-%d"),
+        datetime.strptime("2022-11-4", "%Y-%m-%d"),
+        datetime.strptime("2022-11-4", "%Y-%m-%d"),
+        datetime.strptime("2022-11-5", "%Y-%m-%d"),
+        datetime.strptime("2022-11-5", "%Y-%m-%d")
+    ]
+    dt = np.array(dt)
     df_t = pd.DataFrame(np.array(v),
                         columns=['time_id', 'investment_id', 'factor_0', 'factor_1'])
+    df_t.iloc[:, 0] = pd.Series(dt)
     print(df_t)
     print("------")
-    # fsplit = QuantTimeSplit_SeqHorizon(k=3)
+    fsplit = QuantTimeSplit_SeqHorizon(k=3)
     # fsplit = QuantTimeSplit_SeqPast(k=3)
     # fsplit = QuantTimeSplit_GroupTime(k=4)
     # fsplit = QuantTimeSplit_PurgeSeqHorizon(k=2, gap=1)
     # fsplit = QuantTimeSplit_PurgeSeqPast(k=2, gap=1)
-    fsplit = QuantTimeSplit_PurgeGroupTime(k=4, gap=1)
-    # fsplit = QuantTimeGroupSplit(k=3)
+    # fsplit = QuantTimeSplit_PurgeGroupTime(k=4, gap=1)
     fsplit.split(df_t)
-    fidx = 3
-    print(fsplit.get_folder_idx(fidx))
-    print(fsplit.get_seq_time())
+    fidx = 2
+    # print(fsplit.get_folder_idx(fidx))
+    # print(fsplit.get_seq_time())
     xtr, ytr, xvl, yvl = fsplit.get_folder(df_t, [2, 3], [3], fidx)
     print(xtr.shape)
     print(ytr.shape)

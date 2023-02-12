@@ -1,4 +1,4 @@
-# Quantativ Finance Research Harbour
+# Quantative Finance Research Harbour
 Some Quantative Finance Python Tool & Project For Research &amp; Application
 
 This is a repository which contains things in my quantative finance research & exploration.
