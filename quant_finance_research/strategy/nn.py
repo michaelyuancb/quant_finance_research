@@ -4,10 +4,13 @@ import random
 
 import numpy as np
 import torch
+import time
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
-from quant_finance_research.tools.util import generate_cv_result_df, save_pickle, load_pickle
+from quant_finance_research.utils import generate_cv_result_df, save_pickle, load_pickle, \
+    get_numpy_from_df_train_val
+from quant_finance_research.fe.fe_utils import update_df_column_package
 
 
 def dnn_set_seed(seed):
@@ -18,15 +21,33 @@ def dnn_set_seed(seed):
     torch.backends.cudnn.deterministic = True
 
 
+def _transform_ndim_1(x):
+    if x.ndim == 1:
+        return x.reshape(-1, 1)
+    else:
+        return x
+
+
 class TabDataset(Dataset):
     def __init__(self, x, y):
-        if y.ndim == 1:
-            y = y.reshape(-1, 1)
-        self.x = torch.tensor(x).float()
-        self.y = torch.tensor(y).float()
+        self.x = torch.tensor(_transform_ndim_1(x)).float()
+        self.y = torch.tensor(_transform_ndim_1(y)).float()
 
     def __getitem__(self, index):
         return self.x[index], self.y[index]
+
+    def __len__(self):
+        return self.x.shape[0]
+
+
+class TabLossDataset(Dataset):
+    def __init__(self, x, y, help_loss):
+        self.x = torch.tensor(_transform_ndim_1(x)).float()
+        self.y = torch.tensor(_transform_ndim_1(y)).float()
+        self.help_loss = torch.tensor(_transform_ndim_1(help_loss))
+
+    def __getitem__(self, index):
+        return self.x[index], self.y[index], self.help_loss[index]
 
     def __len__(self):
         return self.x.shape[0]
@@ -42,14 +63,16 @@ class NeuralNetworkWrapper:
 
         solver.evaluate(dataloader, loss_func) # evaluate one epoch, return eval_loss. [float]
 
-        solver.train(self, xtrain, ytrain, xval, yval, loss_func,
+        solver.train(self, train_df, val_df, df_column, loss_func, 
+                    use_loss_column=False,  # The column for loss calculation
+                    seed=0,
                     early_stop=20,       # Early stop is on validation dataset.
                     max_epoch=None,      # The max epoch number.
                     epoch_print=10,     
                     num_workers=0, 
                     batch_size=2048):    # train the model with batch_size, return loss_val_best. [float]
 
-        solver.predict(xtest, batch_size=2048)  
+        solver.predict(test_df, x_column, batch_size=2048)  
                 # predict the result. return the np.array(N_test, **). [ndarray]
                 
         solver.set_device(device)  # set the wrapper to the new device.
@@ -70,45 +93,78 @@ class NeuralNetworkWrapper:
         self.best_loss = []
         self.device = device
 
-    def training(self, dataloader, loss_func):
+    def training(self, dataloader, loss_func, use_loss_column=False):
         self.nn.train()
         floss = torch.zeros(1).to(self.device)
-        for (X, y) in dataloader:
-            X = X.to(self.device)
-            y = y.to(self.device)
-            self.optimizer.zero_grad()
-            pred = self.nn(X)
-            loss = loss_func(pred, y)
-            loss.backward()
-            self.optimizer.step()
-            floss = floss + loss
+        if use_loss_column:
+            for (X, y, loss_help) in dataloader:
+                X = X.to(self.device)
+                y = y.to(self.device)
+                loss_help = loss_help.to(self.device)
+                self.optimizer.zero_grad()
+                pred = self.nn(X)
+                loss = loss_func(pred, y, loss_help)
+                loss.backward()
+                self.optimizer.step()
+                floss = floss + loss
+        else:
+            for (X, y) in dataloader:
+                X = X.to(self.device)
+                y = y.to(self.device)
+                self.optimizer.zero_grad()
+                pred = self.nn(X)
+                loss = loss_func(pred, y)
+                loss.backward()
+                self.optimizer.step()
+                floss = floss + loss
+
         return (floss.item()) / len(dataloader)
 
-    def evaluate(self, dataloader, loss_func):
+    def evaluate(self, dataloader, loss_func, use_loss_column=False):
         self.nn.eval()
         floss = torch.zeros(1).to(self.device)
         with torch.no_grad():
-            for (X, y) in dataloader:
-                X, y = X.to(self.device), y.to(self.device)
-                pred = self.nn(X)
-                loss = loss_func(pred, y)
-                floss = floss + loss
+            if use_loss_column:
+                for (X, y, loss_help) in dataloader:
+                    X, y = X.to(self.device), y.to(self.device)
+                    loss_help = loss_help.to(self.device)
+                    pred = self.nn(X)
+                    loss = loss_func(pred, y, loss_help)
+                    floss = floss + loss
+            else:
+                for (X, y) in dataloader:
+                    X, y = X.to(self.device), y.to(self.device)
+                    pred = self.nn(X)
+                    loss = loss_func(pred, y)
+                    floss = floss + loss
+
         return (floss.item()) / len(dataloader)
 
-    def train(self, xtrain, ytrain, xval, yval, loss_func,
+    def train(self, train_df, val_df, df_column, loss_func, use_loss_column=False,
+              inv_col='investment_id', time_col='time_id',
               seed=0,
               early_stop=20,
               max_epoch=None,
               epoch_print=10,
               num_workers=0,
-              batch_size=2048):
+              batch_size=2048,
+              **kwargs):
+        xtrain, ytrain, xval, yval = get_numpy_from_df_train_val(train_df, val_df, df_column)
         dnn_set_seed(seed)
-        train_loader = DataLoader(TabDataset(xtrain, ytrain), batch_size=batch_size, shuffle=True,
-                                  num_workers=num_workers)
-        val_loader = DataLoader(TabDataset(xval, yval), batch_size=batch_size, shuffle=False, num_workers=num_workers)
-
-        loss_train = self.evaluate(train_loader, loss_func)
-        loss_val = self.evaluate(val_loader, loss_func)
+        if not use_loss_column:
+            train_loader = DataLoader(TabDataset(xtrain, ytrain), batch_size=batch_size, shuffle=True,
+                                      num_workers=num_workers)
+            val_loader = DataLoader(TabDataset(xval, yval), batch_size=batch_size, shuffle=False,
+                                    num_workers=num_workers)
+        else:
+            loss_column = df_column['loss']
+            ltrain, lval = train_df.iloc[:, loss_column].values, val_df.iloc[:, loss_column].values
+            train_loader = DataLoader(TabLossDataset(xtrain, ytrain, ltrain), batch_size=batch_size, shuffle=True,
+                                      num_workers=num_workers)
+            val_loader = DataLoader(TabLossDataset(xval, yval, lval), batch_size=batch_size, shuffle=False,
+                                    num_workers=num_workers)
+        loss_train = self.evaluate(train_loader, loss_func, use_loss_column)
+        loss_val = self.evaluate(val_loader, loss_func, use_loss_column)
         self.best_param = self.nn.state_dict()
         loss_val_best = loss_val
         print(f"[initial]: train_loss={np.round(loss_train, 5)} ; val_loss={np.round(loss_val, 5)} ; "
@@ -118,18 +174,20 @@ class NeuralNetworkWrapper:
         inf_num = 1000000000
         max_epoch = max_epoch if max_epoch is not None else inf_num
         for eph in range(max_epoch):
-            loss_train = self.training(train_loader, loss_func)
-            loss_val = self.evaluate(val_loader, loss_func)
+            eph_start = time.time()
+            loss_train = self.training(train_loader, loss_func, use_loss_column)
+            loss_val = self.evaluate(val_loader, loss_func, use_loss_column)
             if loss_val <= loss_val_best:
                 loss_val_best = loss_val
                 self.best_param = self.nn.state_dict()
                 count = 0
             else:
                 count = count + 1
+            eph_time = time.time() - eph_start
             epoch = epoch + 1
             if epoch % epoch_print == 0:
                 print(f"[Epoch {epoch}]: train_loss={np.round(loss_train, 5)} ; val_loss={np.round(loss_val, 5)} ; "
-                      f"val_loss_best={np.round(loss_val_best, 5)}")
+                      f"val_loss_best={np.round(loss_val_best, 5)} ; epoch_time={eph_time:.2f}s")
             self.train_loss.append(loss_train)
             self.val_loss.append(loss_val)
             self.best_loss.append(loss_val_best)
@@ -146,10 +204,12 @@ class NeuralNetworkWrapper:
             self.nn.to(self.device)
         return loss_val_best
 
-    def predict(self, xtest, batch_size=2048):
+    def predict(self, test_df, df_column, inv_col='investment_id', time_col='time_id', batch_size=2048):
+        x_column = df_column['x']
         self.load_param(self.best_param)
-        pred = []
+        xtest = test_df.iloc[:, x_column].values
         self.nn.eval()
+        pred = []
         n_test = xtest.shape[0]
         with torch.no_grad():
             l = 0
@@ -200,14 +260,19 @@ class NeuralNetworkEnsembleBase(abc.ABC):
             model = NeuralNetworkWrapper(dnn_list[i], optimzer_list[i], device)
             self.model_list.append(model)
 
-    def predict(self, xtest, batch_size=2048):
+    def predict(self, test_df, df_column, inv_col='investment_id', time_col='time_id', batch_size=2048):
         predict_val = []
         for i in tqdm(range(self.n_dnn)):
-            val = self.model_list[i].predict(xtest, batch_size=batch_size)
+            val = self.model_list[i].predict(test_df, df_column, inv_col=inv_col, time_col=time_col,
+                                             batch_size=batch_size)
             predict_val.append(val)
         predict_val = np.array(predict_val)
         val = np.mean(predict_val, 0)
         return val, predict_val  # float, ndarray(k,)
+
+    def set_device(self, device):
+        for i in range(self.n_dnn):
+            self.model_list[i].set_device(device)
 
     def get_best_param(self):
         param = {}
@@ -229,105 +294,92 @@ class NeuralNetworkEnsembleBase(abc.ABC):
 
 
 class NeuralNetworkAvgBaggingEnsemble(NeuralNetworkEnsembleBase):
-    """Wrap the average bagging neural network ensemble framework for convenient usage."""
-    """API
-
-        solver = NeuralNetworkAvgBaggingWrapper(dnn_list, optimizer_list, seed_list, device)
-
-        solver.ensemble_set_seed(seed)  # set the global seed.
-
-        solver.train(self, xtrain, ytrain, xval, yval, loss_func,
-                    early_stop=20,       # Early stop is on validation dataset.
-                    max_epoch=None,      # The max epoch number.
-                    epoch_print=10,      
-                    num_workers=0,
-                    batch_size=2048):    # train all model with batch_size, 
-                                         # return np.float, np.array(k,) [the loss_val_best list]
-
-        solver.predict(xtest, batch_size=2048)  
-                            # predict the result. 
-                            # return return np.float, np.array(k,) ; mean prediction & [the prediction of each model]
-        solver.get_best_param()  # get the best state_parameter with dict("model1":..., "model2":..., ...) [dict]
-        solver.load_param() # load the state_parameter of each model.
-    """
 
     def __init__(self, dnn_list, optimzer_list, seed_list, device="cuda"):
         super(NeuralNetworkAvgBaggingEnsemble, self).__init__(dnn_list, optimzer_list, device)
         self.seed_list = seed_list
 
-    def train(self, xtrain, ytrain, xval, yval, loss_func,
+    def train(self, train_df, val_df, df_column, loss_func, use_loss_column=False,
+              inv_col='investment_id', time_col='time_id',
               early_stop=20,
               max_epoch=None,
               epoch_print=10,
               num_workers=0,
-              batch_size=2048):
+              batch_size=2048,
+              **kwargs):
         loss_val_best = []
         for i, seed in enumerate(self.seed_list):
             print(f"Start Traning Model{i}: seed={seed}")
-            lval = self.model_list[i].train(xtrain, ytrain, xval, yval, loss_func,
+            lval = self.model_list[i].train(train_df, val_df, df_column, loss_func, use_loss_column=use_loss_column,
+                                            inv_col=inv_col, time_col=time_col,
                                             seed=self.seed_list[i],
-                                            early_stop=early_stop, max_epoch=max_epoch,
+                                            early_stop=early_stop,
+                                            max_epoch=max_epoch,
                                             epoch_print=epoch_print,
                                             num_workers=num_workers,
-                                            batch_size=batch_size)
+                                            batch_size=batch_size,
+                                            **kwargs)
             loss_val_best.append(lval)
         loss_val_best = np.array(loss_val_best)
         return np.mean(loss_val_best), loss_val_best
 
 
 class NeuralNetworkCVEnsemble(NeuralNetworkEnsembleBase):
-    """Wrap the cross validation neural network ensemble framework for convenient usage."""
-    """API
 
-        solver = NeuralNetworkAvgBaggingWrapper(dnn_list, optimizer_list, seed_list, device)
-
-        solver.ensemble_set_seed(seed)  # set the global seed.
-
-        solver.train(self, data_df, spliter, x_column, y_column, loss_func,
-                    early_stop=20,       # Early stop is on validation dataset.
-                    max_epoch=None,      # The max epoch number.
-                    epoch_print=10,      
-                    num_workers=0,
-                    batch_size=2048):    # train all model with batch_size.
-                                         # return np.float, np.array(k,) [the loss_val_best list]
-
-        solver.predict(xtest, batch_size=2048)  
-                            # predict the result. 
-                            # return return np.float, np.array(k,) ; mean prediction & [the prediction of each model]
-        solver.get_best_param()  # get the best state_parameter with dict("model1":..., "model2":..., ...) [dict]
-        solver.load_param() # load the state_parameter of each model.
-    """
-
-    def __init__(self, dnn_list, optimzer_list, seed, device="cuda"):
+    def __init__(self, dnn_list, optimzer_list, seed=0, device="cuda"):
         super(NeuralNetworkCVEnsemble, self).__init__(dnn_list, optimzer_list, device)
         self.seed = seed
 
-    def train(self, data_df, spliter, x_column, y_column, loss_func,
-              inv_col='investment_id',
-              time_col='time_id',
+    def train(self, data_df, df_column, spliter, loss_func, use_loss_column=False,
+              inv_col='investment_id', time_col='time_id',
               need_split=True,
               early_stop=20,
               max_epoch=None,
               epoch_print=10,
               num_workers=0,
-              batch_size=2048):
+              batch_size=2048,
+              **kwargs):
         assert self.n_dnn == spliter.get_k()
         if need_split:
             spliter.split(data_df, inv_col=inv_col, time_col=time_col)
         loss_val_best = []
         for i in range(self.n_dnn):
             print(f"Start Traning Model{i}")
-            xtr, ytr, xvl, yvl = spliter.get_folder(data_df, x_column, y_column, i)
-            lval = self.model_list[i].train(xtr, ytr, xvl, yvl, loss_func,
+            train_df, test_df = spliter.get_folder(data_df, i, **kwargs)
+            if hasattr(spliter, "get_folder_preprocess_package"):
+                pro_package = spliter.get_folder_preprocess_package(i)
+                df_column = update_df_column_package(df_column, pro_package)
+
+            lval = self.model_list[i].train(train_df, test_df, df_column, loss_func, use_loss_column=use_loss_column,
+                                            inv_col=inv_col, time_col=time_col,
                                             seed=self.seed,
-                                            early_stop=early_stop, max_epoch=max_epoch,
+                                            early_stop=early_stop,
+                                            max_epoch=max_epoch,
                                             epoch_print=epoch_print,
                                             num_workers=num_workers,
-                                            batch_size=batch_size)
+                                            batch_size=batch_size,
+                                            **kwargs)
             loss_val_best.append(lval)
 
         loss_val_best = np.array(loss_val_best)
         return np.mean(loss_val_best), loss_val_best
+
+    def predict(self, test_df, df_column, inv_col='investment_id', time_col='time_id',
+                spliter=None, batch_size=2048):
+        predict_val = []
+        for i in tqdm(range(self.n_dnn)):
+            if spliter is not None:
+                xtest_df, _ = spliter.get_folder_preprocess(test_df, i)
+                if hasattr(spliter, "get_folder_preprocess_package"):
+                    pro_package = spliter.get_folder_preprocess_package(i)
+                    df_column = update_df_column_package(df_column, pro_package)
+            else:
+                xtest_df = test_df
+            val = self.model_list[i].predict(xtest_df, df_column, batch_size=batch_size)
+            predict_val.append(val)
+        predict_val = np.array(predict_val)
+        val = np.mean(predict_val, 0)
+        return val, predict_val  # float, ndarray(k,)
 
 
 class NeuralNetworkCV:
@@ -340,28 +392,34 @@ class NeuralNetworkCV:
             model = NeuralNetworkWrapper(dnn_list[i], optimzer_list[i], device)
             self.model_list.append(model)
 
-    def cv(self, data_df, spliter, x_column, y_column, loss_func,
-           inv_col='investment_id',
-           time_col='time_id',
+    def cv(self, data_df, df_column, spliter, loss_func, use_loss_column=False,
+           inv_col='investment_id', time_col='time_id',
            need_split=True,
            early_stop=20,
            max_epoch=None,
            epoch_print=10,
            num_workers=0,
-           batch_size=2048):
+           batch_size=2048,
+           **kwargs):
         assert self.n_dnn == spliter.get_k()
         if need_split:
             spliter.split(data_df, inv_col=inv_col, time_col=time_col)
         loss_val_list = []
         for i in range(self.n_dnn):
             print(f"Start Traning Model{i}")
-            xtr, ytr, xvl, yvl = spliter.get_folder(data_df, x_column, y_column, i)
-            loss_val = self.model_list[i].train(xtr, ytr, xvl, yvl, loss_func,
+            train_df, test_df = spliter.get_folder(data_df, i, **kwargs)
+            if hasattr(spliter, "get_folder_preprocess_package"):
+                pro_package = spliter.get_folder_preprocess_package(i)
+                df_column = update_df_column_package(df_column, pro_package)
+            loss_val = self.model_list[i].train(train_df, test_df, df_column, loss_func, use_loss_column=use_loss_column,
+                                                inv_col=inv_col, time_col=time_col,
                                                 seed=0,
-                                                early_stop=early_stop, max_epoch=max_epoch,
+                                                early_stop=early_stop,
+                                                max_epoch=max_epoch,
                                                 epoch_print=epoch_print,
                                                 num_workers=num_workers,
-                                                batch_size=batch_size)
+                                                batch_size=batch_size,
+                                                **kwargs)
             loss_val_list.append(loss_val)
 
         loss_val_list = np.array(loss_val_list)
@@ -394,15 +452,18 @@ class NeuralNetworkGridCVBase(abc.ABC):
         self.device = device
         self.cv_param = []
 
-    def cv(self, data_df, spliter, x_column, y_column, loss_func,
-           inv_col='investment_id',
-           time_col='time_id',
+    def cv(self, data_df, df_column, spliter, loss_func, use_loss_column=False,
+           inv_col='investment_id', time_col='time_id',
            need_split=True,
            early_stop=20,
            max_epoch=None,
            epoch_print=10,
            num_workers=0,
-           batch_size=2048):
+           batch_size=2048,
+           **kwargs):
+        """
+         # Notice that if spliter is QTS_PreprocessSplit, then **kwargs is used to transport preprocess parameters.
+        """
         assert spliter.get_k() == self.k
         if need_split:
             spliter.split(data_df, inv_col=inv_col, time_col=time_col)
@@ -413,13 +474,15 @@ class NeuralNetworkGridCVBase(abc.ABC):
             dnn_list, optimizer_list = self.get_model_list(param)
             print(f"Start CV param={param}")
             cv_dnn = NeuralNetworkCV(dnn_list, optimizer_list, self.device)
-            loss_mean, loss_val_list = cv_dnn.cv(data_df, spliter, x_column, y_column, loss_func,  # numpy
+            loss_mean, loss_val_list = cv_dnn.cv(data_df, df_column, spliter, loss_func, use_loss_column=use_loss_column,
+                                                 inv_col=inv_col, time_col=time_col,
                                                  need_split=False,
                                                  early_stop=early_stop,
                                                  max_epoch=max_epoch,
                                                  epoch_print=epoch_print,
                                                  num_workers=num_workers,
-                                                 batch_size=batch_size
+                                                 batch_size=batch_size,
+                                                 **kwargs
                                                  )
             self.cv_param.append(cv_dnn.get_best_param())
             cv_result.append((loss_mean, loss_val_list))
