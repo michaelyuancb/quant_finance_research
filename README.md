@@ -26,7 +26,7 @@ QwQ
 
 Core Data Structure:
 
- - data_df:  pandas.DataFrame with the 1st and 2nd column be ["time_id", "investment_id"]. Other columns contain "x_column", "y_column" and "loss_column". (loss_column is used for calculation of loss function.)
+ - data_df:  pandas.DataFrame with the 1st and 2nd column be ["time_id", "investment_id"]. Other columns contain "x_column", "y_column" and "loss_column". (loss_column is used for calculation of loss function.) Notice that the index of DataFrame should be continue, which means that df.index[-1]==df.shape[0]-1.
 
  - df_column: a dict to point out the [x_column, y_column, loss_column]. Format: df_column={"x": x_column, "y": y_column, "loss": loss_column}. Each column is a list with interger as its items.
 

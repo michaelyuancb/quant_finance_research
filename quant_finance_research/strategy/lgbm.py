@@ -8,7 +8,7 @@ from lightgbm import LGBMRegressor
 from lightgbm import early_stopping, log_evaluation
 
 from quant_finance_research.utils import *
-from quant_finance_research.eval.factor_eval import evaluate_rmse
+from quant_finance_research.eval.factor_eval import evaluate_RMSE
 from quant_finance_research.fe.fe_utils import update_df_column_package
 
 
@@ -145,7 +145,7 @@ class LightGBMCV:
         self.lgbm = LightGBMWrapper(lgbm)
         self.lgbm_cv_list = []
 
-    def cv(self, data_df, df_column, spliter, evaluate_func=evaluate_rmse,
+    def cv(self, data_df, df_column, spliter, evaluate_func=evaluate_RMSE,
            inv_col='investment_id',
            time_col='time_id',
            need_split=True,
@@ -191,7 +191,7 @@ class LightGBMGridCVBase:
         self.param_dict = param_dict
         self.cv_model_list = []
 
-    def cv(self, data_df, df_column, spliter, evaluate_func=evaluate_rmse,
+    def cv(self, data_df, df_column, spliter, evaluate_func=evaluate_RMSE,
            inv_col='investment_id', time_col='time_id',
            need_split=True,
            early_stopping_rounds=20,
@@ -243,7 +243,7 @@ class LightGBMGridCVBase_Example(LightGBMGridCVBase):
         lgbm = LGBMRegressor(
             boosting_type='gbdt',
             objective='regression',
-            silent=True,
+            n_estimators=100,
             learning_rate=param['learning_rate'],
             max_depth=param['max_depth']
         )

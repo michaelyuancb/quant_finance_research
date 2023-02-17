@@ -7,16 +7,40 @@ def debug_set_seed():
     print("succeed.")
 
 
+def debug_set_df_continue_index():
+    df, df_column = get_example_df()
+    df.index = [6, 5, 4, 3, 2, 1] + [0, 0, 0, 0, 0, 0]
+    print(df)
+    set_df_continue_index(df)
+    print(df)
+
+
 def debug_get_example_df():
     df, df_column = get_example_df()
     print(df)
     print(df_column)
+    print(df.iloc[:, df_column['loss']].values.sum())
 
 
-def def_get_example_large_df():
+def debug_get_example_large_df():
     df, df_column = get_example_large_df()
     print(df)
     print(df_column)
+    print(df.iloc[:, df_column['loss']].values.sum())
+
+
+def debug_datetime2int():
+    dtt = datetime.strptime("2022-02-17 11:11:05", "%Y-%m-%d %H:%M:%S")
+    print(dtt)
+    print(datetime2int(dtt))
+
+
+def debug_list_datetime2int():
+    dtt = datetime.strptime("2022-02-17 11:11:05", "%Y-%m-%d %H:%M:%S")
+    dtt2 = datetime.strptime("2022-02-17 11:12:08", "%Y-%m-%d %H:%M:%S")
+    dt_list = [dtt, dtt2]
+    print(dt_list)
+    print(list_datetime2int(dt_list))
 
 
 def debug_reduce_mem_usage_df():
@@ -57,8 +81,11 @@ def debug_get_numpy_from_df_train_val():
 
 if __name__ == "__main__":
     # debug_set_seed()
+    # debug_set_df_continue_index()
     # debug_get_example_df()
-    # def_get_example_large_df()
+    # debug_get_example_large_df()
+    # debug_datetime2int()
+    debug_list_datetime2int()
     # debug_reduce_mem_usage_df()
     # debug_transfer_numpy_cpu()
     # debug_get_numpy_from_df_train_val()

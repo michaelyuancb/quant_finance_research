@@ -1,0 +1,7 @@
+
+
+1. fe.fe_feat:
+    (1) delete_row : 删除column中缺失值占比大于threshold的行
+
+2. strategy:
+    (2) lgbm: 将lgbm的存储与转入改为param而不是直接pickle整个模型

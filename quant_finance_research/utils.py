@@ -16,6 +16,10 @@ def set_seed(seed):
     torch.backends.cudnn.deterministic = True
 
 
+def set_df_continue_index(df):
+    df.index = range(len(df))
+
+
 def get_example_df():
     v = np.array([[1, 0, 1, 2, 1], [2, 0, 3, 2, 3], [1, 1, 4, 5, 4], [3, 0, 3, 3, 3], [1, 2, 0, 5, 0],
                   [2, 1, 0, 3, 0],
@@ -37,7 +41,7 @@ def get_example_df():
         datetime.strptime("2022-11-10", "%Y-%m-%d")
     ]
     np.random.seed(0)
-    weight = np.random.rand(12, 1)
+    weight = np.array([0.1, 0.05, 0.05, 0.1, 0.2, 0.02, 0.08, 0.15, 0.05, 0.1, 0.04, 0.06]).reshape(-1, 1)
     dt = np.array(dt)
     df_t = pd.DataFrame(np.concatenate([v, weight], axis=1),
                         columns=['time_id', 'investment_id', 'factor_0', 'factor_1', 'target', 'weight'])
@@ -74,7 +78,7 @@ def get_example_large_df():
     extra_x = np.random.randn(n, 201)
     v = np.concatenate([v, extra_x], axis=1)
     np.random.seed(0)
-    weight = np.random.rand(12, 1)
+    weight = np.array([0.1, 0.05, 0.05, 0.1, 0.2, 0.02, 0.08, 0.15, 0.05, 0.1, 0.04, 0.06]).reshape(-1, 1)
     cls = ['time_id', 'investment_id'] + ['factor_' + str(i) for i in range(200)] + ['target'] + ['weight']
     dt = np.array(dt)
     df_t = pd.DataFrame(np.concatenate([np.array(v), weight], axis=1),
@@ -86,6 +90,16 @@ def get_example_large_df():
     loss_column = [203]
     df_column = {"x": x_column, "y": y_column, "loss": loss_column}
     return df_t, df_column
+
+
+def datetime2int(date):
+    st = datetime.strftime(date, "%Y%m%d%H%M%S")
+    return int(st)
+
+
+def list_datetime2int(date_list):
+    dint = [datetime2int(date) for date in date_list]
+    return dint
 
 
 def load_pickle(pickle_file):
