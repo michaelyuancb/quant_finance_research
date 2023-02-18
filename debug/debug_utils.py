@@ -43,6 +43,18 @@ def debug_list_datetime2int():
     print(list_datetime2int(dt_list))
 
 
+def debug_seq_data_transform():
+    seq = [1, 3, 2, 5, 3, 2]
+    print(seq_data_transform(seq))
+    print(type(seq_data_transform(seq)))
+    seq = np.array(seq)
+    print(seq_data_transform(seq))
+    print(type(seq_data_transform(seq)))
+    seq = seq.reshape(2, 3)
+    print(seq_data_transform(seq))
+    print(type(seq_data_transform(seq)))
+
+
 def debug_reduce_mem_usage_df():
     df, df_column = get_example_df()
     df2 = reduce_mem_usage_df(df, df_column['x'] + df_column['y'])
@@ -85,7 +97,8 @@ if __name__ == "__main__":
     # debug_get_example_df()
     # debug_get_example_large_df()
     # debug_datetime2int()
-    debug_list_datetime2int()
+    # debug_list_datetime2int()
+    debug_seq_data_transform()
     # debug_reduce_mem_usage_df()
     # debug_transfer_numpy_cpu()
     # debug_get_numpy_from_df_train_val()

@@ -5,8 +5,8 @@ from datetime import datetime
 
 
 def generate_normal_pred():
-    pred = np.array([0.1, 2.3, 5.4, 1.2, 1.79])
-    label = np.array([0.15, 2.31, 5.48, 3.0, -2])
+    pred = np.array([0.1, 2.3, 5.4, 7.6, 10.0])
+    label = np.array([0.15, 2.0, 6.4, 5.4, 11.2])
     t1 = datetime.strptime("2022-11-1", "%Y-%m-%d")
     t2 = datetime.strptime("2022-11-2", "%Y-%m-%d")
     time_id = np.array([t1, t1, t2, t2, t1])
@@ -75,6 +75,8 @@ def debug_evaluate_time():
     print(f"evaluate_IR_time={evaluate_IR_time(pred, label, time_id)}")
     print(f"evaluate_RankIR_time={evaluate_RankIR_time(pred, label, time_id)}")
     print(f"evaluate_classTop_acc_time_2c={evaluate_classTop_acc_time(pred, label, time_id, class_num=2)}")
+    print(pred)
+    print(label)
     print(f"evaluate_classBottom_acc_time_2c={evaluate_classBottom_acc_time(pred, label, time_id, class_num=2)}")
 
     print("========Cord=========")
@@ -155,5 +157,5 @@ def debug_evaluate_ic():
 if __name__ == "__main__":
     # debug_evaluate()
     # debug_evaluate_time()
-    debug_evaluate_StaticWeight()
+    # debug_evaluate_StaticWeight()
     debug_evaluate_StaticWeight_time()

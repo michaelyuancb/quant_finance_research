@@ -102,6 +102,17 @@ def list_datetime2int(date_list):
     return dint
 
 
+def get_tmp_str():
+    return "_@@QwQ##!"
+
+
+def seq_data_transform(seq):
+    if type(seq) is list:
+        seq = np.array(seq)
+    seq = seq.reshape(-1)
+    return seq
+
+
 def load_pickle(pickle_file):
     try:
         with open(pickle_file, 'rb') as f:

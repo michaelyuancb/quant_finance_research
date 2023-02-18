@@ -2,10 +2,11 @@ from quant_finance_research.eval.factor_eval import *
 from quant_finance_research.fe.fe_utils import *
 
 
-def delete_Feature(df, df_column, column, **kwargs):
+def delete_Feature(df_org, df_column, column, **kwargs):
     """
         Delete the Feature of some column.
     """
+    df = df_org.copy()
     col_name = df.columns
     del_name = col_name[column]
     x_column, y_column, loss_column = df_column.values()
@@ -25,10 +26,11 @@ def delete_Feature(df, df_column, column, **kwargs):
 
 
 # Delete NaN
-def delete_NanRatio_Feature(df, df_column, column, del_nan_ratio, del_idx=None, **kwargs):
+def delete_NanRatio_Feature(df_org, df_column, column, del_nan_ratio, del_idx=None, **kwargs):
     """
         Delete the Feature with NaN-Ratio > threshold.
     """
+    df = df_org.copy()
     if del_idx is None and del_nan_ratio is None:
         raise ValueError("At least one of del_x_idx and del_nan_ratio should not be None.")
     elif del_idx is not None:
@@ -43,10 +45,11 @@ def delete_NanRatio_Feature(df, df_column, column, del_nan_ratio, del_idx=None, 
     return new_df, pro_package
 
 
-def find_GlobalAbsIcRank(data_df, df_column, column, number_GAIR, column_GAIR=None, **kwargs):
+def find_GlobalAbsIcRank(df_org, df_column, column, number_GAIR, column_GAIR=None, **kwargs):
     """
         Find the feature ranked 1~number on the abc(IC) of the whole DataFrame,
     """
+    data_df = df_org.copy()
     x_column, y_column, loss_column = df_column.values()
     if column_GAIR is None:
         column_name = data_df.columns[column].tolist()
@@ -63,10 +66,11 @@ def find_GlobalAbsIcRank(data_df, df_column, column, number_GAIR, column_GAIR=No
     return data_df, {"df_column_new": df_column, "column_GAIR": column_GAIR, "number_GAIR": number_GAIR}
 
 
-def add_LocalTimeMeanFactor(data_df, df_column, column, time_col='time_id', **kwargs):
+def add_LocalTimeMeanFactor(df_org, df_column, column, time_col='time_id', **kwargs):
     """
         Generate the mean-factor of each timestamps for fe_column. (mean of all investment for each time-stamps)
     """
+    data_df = df_org.copy()
     x_column, y_column, loss_column = df_column.values()
     width_1 = data_df.shape[1]
     best_corr = data_df.columns[column].tolist()
@@ -82,7 +86,7 @@ def add_LocalTimeMeanFactor(data_df, df_column, column, time_col='time_id', **kw
     return data_df, {"df_column_new": df_column_new, "time_col": time_col}
 
 
-def add_GlobalAbsIcRank_LocalTimeMeanFactor(data_df, df_column, column, number_GAIR,
+def add_GlobalAbsIcRank_LocalTimeMeanFactor(df_org, df_column, column, number_GAIR,
                                             time_col='time_id',
                                             column_GAIR=None, **kwargs
                                             ):
@@ -90,6 +94,7 @@ def add_GlobalAbsIcRank_LocalTimeMeanFactor(data_df, df_column, column, number_G
         For the feature ranked 1~number on the abc(IC) of the whole DataFrame,
         Generate the mean-factor of each timestamps for those feature. (mean of all investment for each time-stamps)
     """
+    data_df = df_org.copy()
     _, pro_package = find_GlobalAbsIcRank(data_df, df_column, column, number_GAIR, column_GAIR=column_GAIR)
     column_GAIR = pro_package['column_GAIR']
     data_df, pro_package_2 = add_LocalTimeMeanFactor(data_df, df_column, column_GAIR, time_col=time_col)

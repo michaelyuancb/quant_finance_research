@@ -1,4 +1,5 @@
 from sklearn.preprocessing import StandardScaler
+from quant_finance_research.utils import get_tmp_str
 import pandas as pd
 import numpy as np
 
@@ -15,7 +16,7 @@ The standard preprocess Function:
 
 
 # MAD-X
-def mad_preprocess(df_org, df_column, column, mad_bound=None, mad_factor=None, **kwargs):
+def mad_preprocess(df_org, df_column, column, mad_bound=None, mad_factor=3, **kwargs):
     """
         Process the MAD (Mean Absolute Deviation) Tail Shrink for feature.
         ::param mad_factor: the tail range should be mad_factor * mad
@@ -31,7 +32,7 @@ def mad_preprocess(df_org, df_column, column, mad_bound=None, mad_factor=None, *
         x_lower, x_upper = mad_bound
     else:
         x_median = df.iloc[:, column].median(axis=0)
-        x_mad = df.iloc[:, column].mad(axis=0)
+        x_mad = 1.483 * (df.iloc[:, column] - x_median).abs().median(axis=0)
         x_upper = x_mad + x_median * mad_factor
         x_lower = x_mad - x_median * mad_factor
         x_upper = x_upper.values
@@ -47,7 +48,7 @@ def mad_preprocess(df_org, df_column, column, mad_bound=None, mad_factor=None, *
 
 
 # ZScore
-def zscore_preprocess(df_org, df_column, column, zscore_trans_scaler=None, **kwargs):
+def zscore_normalize_preprocess(df_org, df_column, column, zscore_trans_scaler=None, **kwargs):
     """
         Process the ZScore for feature with sklearn StandardNorm scaler.
     """
@@ -60,13 +61,39 @@ def zscore_preprocess(df_org, df_column, column, zscore_trans_scaler=None, **kwa
 
 
 # Inverse Zscore
-def zscore_inverse_preprocess(df_org, df_column, column, zscore_rev_scaler, **kwargs):
+def zscore_normalize_inverse_preprocess(df_org, df_column, column, zscore_rev_scaler, **kwargs):
     """
         Process the Inverse-ZScore for feature with sklearn StandardNorm scaler.
     """
     df = df_org.copy()
     df.iloc[:, column] = zscore_rev_scaler.inverse_transform(df.iloc[:, column])
     return df, {"zscore_rev_scaler": zscore_rev_scaler}
+
+
+def sumone_normalize_preprocess(df_org, df_column, column, sumone_denominator=None, **kwargs):
+    """
+        Redistribute the value of column to make the sum of each column equal to one.
+    """
+    df = df_org.copy()
+    if sumone_denominator is None:
+        sumone_denominator = df.iloc[:, column].sum()
+    df.iloc[:, column] = df.iloc[:, column] / sumone_denominator.apply(lambda x: 1.0 if x == 0 else x)
+    return df, {"sumone_denominator": sumone_denominator}
+
+
+def panel_time_sumone_normalize_preprocess(df_org, df_column, column, time_col="time_id", **kwargs):
+    df = df_org.copy()
+    dfg = df[[time_col]+df.columns[column].tolist()].groupby(time_col).sum()
+    org_name = dfg.columns.tolist()
+    trf_name = {rname: rname+get_tmp_str() for rname in org_name}
+    dfg = dfg.rename(columns=trf_name)
+    df = pd.merge(df, dfg, how='left', left_on=time_col, right_on=time_col)
+    del dfg
+    for org_name, tname in trf_name.items():
+        df[org_name] = df[org_name] / df[tname].apply(lambda x: 1.0 if x == 0 else x)
+    for tname in trf_name.values():
+        del df[tname]
+    return df, {"time_col": time_col}
 
 
 # Fillna-FixValue
@@ -92,7 +119,7 @@ def classic_x_preprocess_package_1(df_org, df_column, column, mad_factor, fillna
     """
     df = df_org.copy()
     df, package = mad_preprocess(df, df_column, column, mad_bound=mad_bound, mad_factor=mad_factor)
-    df, package_2 = zscore_preprocess(df, df_column, column, zscore_trans_scaler=zscore_trans_scaler)
+    df, package_2 = zscore_normalize_preprocess(df, df_column, column, zscore_trans_scaler=zscore_trans_scaler)
     package.update(package_2)
     df, package_3 = fillna_fixval_preprocess(df, df_column, column, fillna_val=fillna_val)
     package.update(package_3)

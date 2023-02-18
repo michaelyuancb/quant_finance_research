@@ -68,8 +68,8 @@ def evaluate_classBottom_acc(pred, label, class_num=5, need_reshape=True):
     cnt = pred.shape[0]
     if cnt < class_num:
         return np.nan
-    pv = pred.argsort().argsort() > cnt - cnt // class_num - 1
-    lv = label.argsort().argsort() > cnt - cnt // class_num - 1
+    pv = pred.argsort().argsort() < cnt // class_num
+    lv = label.argsort().argsort() < cnt // class_num
     acc = np.sum(pv * lv) / (cnt // class_num)
     return acc
 
@@ -80,16 +80,16 @@ def evaluate_factor_classic_1(pred, label, model_name='Default', need_reshape=Tr
     # pred & label & time_id: 1D numpy.
     ic = evaluate_IC(pred, label)
     ric = evaluate_RankIC(pred, label)
-    t5 = evaluate_classTop_acc(pred, label, class_num=5, need_reshape=False)
-    b5 = evaluate_classBottom_acc(pred, label, class_num=5, need_reshape=False)
+    t20 = evaluate_classTop_acc(pred, label, class_num=20, need_reshape=False)
+    b20 = evaluate_classBottom_acc(pred, label, class_num=20, need_reshape=False)
     t10 = evaluate_classTop_acc(pred, label, class_num=10, need_reshape=False)
     b10 = evaluate_classBottom_acc(pred, label, class_num=10, need_reshape=False)
-    data_list = [ic, ric, t5, b5, t10, b10]
-    data_list = [np.round(d, 3) for d in data_list]
+    data_list = [ic, ric, t10, b10, t20, b20]
+    data_list = [np.round(d, 4) for d in data_list]
     df = pd.DataFrame([[model_name] + data_list],
                       columns=['Model', 'IC', 'RankIC',
-                               '5CTopAcc', '5CBotAcc',
-                               '10CTopAcc', '10CBotAcc'])
+                               '10CTopAcc', '10CBotAcc',
+                               '20CTopAcc', '20CBotAcc'])
     return df
 
 
@@ -248,7 +248,7 @@ def evaluate_factor_time_classic_1(pred, label, time_id, model_name='Default', n
     t10 = evaluate_classTop_acc_time(pred, label, time_id, class_num=10, need_reshape=False)
     b10 = evaluate_classBottom_acc_time(pred, label, time_id, class_num=10, need_reshape=False)
     data_list = [ic[0], ric[0], ir[0], rir[0], t10[0], b10[0], t20[0], b20[0]]
-    data_list = [np.round(d, 3) for d in data_list]
+    data_list = [np.round(d, 4) for d in data_list]
     df = pd.DataFrame([[model_name] + data_list],
                       columns=['Model', 'IC', 'RankIC', 'IR', 'RankIR',
                                '10CTopAcc', '10CBotAcc', '20CTopAcc', '20CBotAcc'])
@@ -313,9 +313,9 @@ def evaluate_factor_StaticWeight_classic_1(pred, label, weight, model_name='Defa
         pred, label, weight = pred.reshape(-1), label.reshape(-1), weight.reshape(-1)
     # pred & label & time_id: 1D numpy.
     ic = evaluate_IC_StaticWeight(pred, label, weight, need_reshape=False)
-    ric = evaluate_IC_StaticWeight(pred, label, weight, need_reshape=False)
+    ric = evaluate_RankIC_StaticWeight(pred, label, weight, need_reshape=False)
     data_list = [ic, ric]
-    data_list = [np.round(d, 3) for d in data_list]
+    data_list = [np.round(d, 4) for d in data_list]
     df = pd.DataFrame([[model_name] + data_list],
                       columns=['Model', 'swIC', 'swRankIC'])
     return df
@@ -441,7 +441,7 @@ def evaluate_factor_StaticWeight_time_classic_1(pred, label, weight, time_id, mo
     ric = evaluate_RankIC_StaticWeight_time(pred, label, weight, time_id, need_reshape=False)
     rir = evaluate_RankIR_StaticWeight_time(pred, label, weight, time_id, need_reshape=False)
     data_list = [ic[0], ric[0], ir[0], rir[0]]
-    data_list = [np.round(d, 3) for d in data_list]
+    data_list = [np.round(d, 4) for d in data_list]
     df = pd.DataFrame([[model_name] + data_list],
                       columns=['Model', 'swIC', 'swRankIC', 'swIR', 'swRankIR'])
     return df
