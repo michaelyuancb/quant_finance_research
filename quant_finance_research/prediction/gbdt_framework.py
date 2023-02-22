@@ -7,19 +7,23 @@ import abc
 from lightgbm import LGBMRegressor
 from lightgbm import early_stopping, log_evaluation
 
+from lightgbm import LGBMModel
+from xgboost import XGBModel
+from catboost import CatBoost
 from quant_finance_research.utils import *
+from quant_finance_research.prediction.prediction_utils import *
 from quant_finance_research.eval.factor_eval import evaluate_RMSE
 from quant_finance_research.fe.fe_utils import update_df_column_package
 
 
-class LightGBMWrapper:
+class GBDTWrapper:
     """
         Wrap the lightGBM framework for convenient usage.
     """
 
-    def __init__(self, lgbm, seed=0):
-        self.lgbm = lgbm
-        self.lgbm.random_state = seed
+    def __init__(self, gbdt, seed=0):
+        self.gbdt = gbdt
+        self.gbdt.random_state = seed
 
     def train(self, train_df, val_df, df_column,
               inv_col='investment_id', time_col='time_id',
@@ -29,29 +33,40 @@ class LightGBMWrapper:
         xtrain, ytrain, xval, yval = get_numpy_from_df_train_val(train_df, val_df, df_column)
         ytrain = ytrain.reshape(-1)
         yval = yval.reshape(-1)
-        callbacks = [log_evaluation(period=verbose), early_stopping(stopping_rounds=early_stopping_rounds)]
-        self.lgbm.fit(xtrain, ytrain, eval_set=[(xval, yval)], callbacks=callbacks)
+        if isinstance(self.gbdt, LGBMModel):
+            callbacks = [log_evaluation(period=verbose), early_stopping(stopping_rounds=early_stopping_rounds)]
+            self.gbdt.fit(xtrain, ytrain, eval_set=[(xval, yval)], callbacks=callbacks)
+        elif isinstance(self.gbdt, CatBoost):
+            self.gbdt.set_params(allow_writing_files=False)
+            self.gbdt.fit(xtrain, ytrain, eval_set=[(xval, yval)], verbose=verbose,
+                          early_stopping_rounds=early_stopping_rounds)
+        elif isinstance(self.gbdt, XGBModel):
+            self.gbdt.set_params(early_stopping_rounds=early_stopping_rounds)
+            self.gbdt.fit(xtrain, ytrain, eval_set=[(xval, yval)],
+                          verbose=verbose, sample_weight=None)
+        else:
+            raise AttributeError(f"Unsupported GDBT Type: {type(self.gbdt)} in Training Step.")
 
-    def predict(self, test_df, df_column, inv_col='investment_id', time_col='time_id',):
+    def predict(self, test_df, df_column, inv_col='investment_id', time_col='time_id', ):
         xtest = test_df.iloc[:, df_column['x']].values
-        pred = self.lgbm.predict(xtest)
+        pred = self.gbdt.predict(xtest)
         return pred
 
     def get_model(self):
-        return self.lgbm
+        return self.gbdt
 
     def load_model(self, filename):
-        self.lgbm = load_pickle(filename)
+        self.gbdt = load_pickle(filename)
 
     def save_model(self, filename):
-        save_pickle(filename, self.lgbm)
+        save_pickle(filename, self.gbdt)
 
 
-class LightGBMEnsembleBase(abc.ABC):
+class GBDTEnsembleBase(abc.ABC):
 
-    def __init__(self, lgbm_list):
-        self.k = len(lgbm_list)
-        self.lgbm_list = [LightGBMWrapper(lgbm_r) for lgbm_r in lgbm_list]
+    def __init__(self, gbdt_list):
+        self.k = len(gbdt_list)
+        self.gbdt_list = [GBDTWrapper(gbdt_r) for gbdt_r in gbdt_list]
 
     def get_k(self):
         return self.k
@@ -59,17 +74,17 @@ class LightGBMEnsembleBase(abc.ABC):
     def predict(self, test_df, df_column, inv_col='investment_id', time_col='time_id'):
         pred_list = []
         for i in range(self.k):
-            pred = self.lgbm_list[i].predict(test_df, df_column, inv_col=inv_col, time_col=time_col)
+            pred = self.gbdt_list[i].predict(test_df, df_column, inv_col=inv_col, time_col=time_col)
             pred_list.append(pred)
         pred_list = np.array(pred_list)
         pred = np.mean(pred_list, axis=0)
         return pred, pred_list  # np.float, np.ndarray
 
     def get_ensemble_model(self):
-        return self.lgbm_list
+        return self.gbdt_list
 
-    def set_ensemble_model(self, lgbm_list):
-        self.lgbm_list = lgbm_list
+    def set_ensemble_model(self, gbdt_list):
+        self.gbdt_list = gbdt_list
 
     def save_ensemble_model_file(self, filename):
         save_pickle(filename, self.get_ensemble_model())
@@ -79,10 +94,10 @@ class LightGBMEnsembleBase(abc.ABC):
         self.set_ensemble_model(en_model)
 
 
-class LightGBMCVEnsemble(LightGBMEnsembleBase):
+class GBDTCVEnsemble(GBDTEnsembleBase):
 
-    def __init__(self, lgbm_list):
-        super(LightGBMCVEnsemble, self).__init__(lgbm_list)
+    def __init__(self, gbdt_list):
+        super(GBDTCVEnsemble, self).__init__(gbdt_list)
 
     def train(self, data_df, df_column, spliter,
               inv_col='investment_id', time_col='time_id',
@@ -98,7 +113,7 @@ class LightGBMCVEnsemble(LightGBMEnsembleBase):
             if hasattr(spliter, "get_folder_preprocess_package"):
                 pro_package = spliter.get_folder_preprocess_package(i)
                 df_column = update_df_column_package(df_column, pro_package)
-            self.lgbm_list[i].train(train_df, val_df, df_column,
+            self.gbdt_list[i].train(train_df, val_df, df_column,
                                     time_col=time_col, inv_col=inv_col,
                                     early_stopping_rounds=early_stopping_rounds,
                                     verbose=verbose, **kwargs)
@@ -114,36 +129,36 @@ class LightGBMCVEnsemble(LightGBMEnsembleBase):
                     df_column = update_df_column_package(df_column, pro_package)
             else:
                 xtest_df = test_df
-            pred = self.lgbm_list[i].predict(xtest_df, df_column)
+            pred = self.gbdt_list[i].predict(xtest_df, df_column)
             pred_list.append(pred)
         pred_list = np.array(pred_list)
         pred = np.mean(pred_list, axis=0)
         return pred, pred_list  # np.float, np.ndarray
 
 
-class LightGBMAvgBaggingEnsemble(LightGBMEnsembleBase):
+class GBDTAvgBaggingEnsemble(GBDTEnsembleBase):
 
-    def __init__(self, lgbm_list, seed_list):
-        super(LightGBMAvgBaggingEnsemble, self).__init__(lgbm_list)
+    def __init__(self, gbdt_list, seed_list):
+        super(GBDTAvgBaggingEnsemble, self).__init__(gbdt_list)
         self.seed_list = seed_list
         for i in range(self.k):
-            self.lgbm_list[i].lgbm.seed = seed_list[i]
+            self.gbdt_list[i].gbdt.seed = seed_list[i]
 
     def train(self, train_df, val_df, df_column,
               early_stopping_rounds=20,
               verbose=0,
               **kwargs):
         for i in tqdm(range(self.k)):
-            self.lgbm_list[i].train(train_df, val_df, df_column, verbose=verbose,
+            self.gbdt_list[i].train(train_df, val_df, df_column, verbose=verbose,
                                     early_stopping_rounds=early_stopping_rounds)
 
 
-class LightGBMCV:
+class GBDTCV:
 
-    def __init__(self, k, lgbm):
+    def __init__(self, k, gbdt):
         self.k = k
-        self.lgbm = LightGBMWrapper(lgbm)
-        self.lgbm_cv_list = []
+        self.gbdt = GBDTWrapper(gbdt)
+        self.gbdt_cv_list = []
 
     def cv(self, data_df, df_column, spliter, evaluate_func=evaluate_RMSE,
            inv_col='investment_id',
@@ -158,33 +173,33 @@ class LightGBMCV:
         folder_err_list = []
         for i in range(spliter.get_k()):
             print(f"Start Traning Model{i}")
-            lgbm_base = copy.deepcopy(self.lgbm)
+            gbdt_base = copy.deepcopy(self.gbdt)
             train_df, val_df = spliter.get_folder(data_df, i, **kwargs)
             if hasattr(spliter, "get_folder_preprocess_package"):
                 pro_package = spliter.get_folder_preprocess_package(i)
                 df_column = update_df_column_package(df_column, pro_package)
 
-            lgbm_base.train(train_df, val_df, df_column, verbose=verbose, time_col=time_col, inv_col=inv_col,
+            gbdt_base.train(train_df, val_df, df_column, verbose=verbose, time_col=time_col, inv_col=inv_col,
                             early_stopping_rounds=early_stopping_rounds)
-            pred_vl = lgbm_base.predict(val_df, df_column)
+            pred_vl = gbdt_base.predict(val_df, df_column)
             verr = evaluate_func(pred_vl.reshape(-1), val_df.iloc[:, df_column['y']].values.reshape(-1))
             folder_err_list.append(verr)
-            self.lgbm_cv_list.append(lgbm_base)
+            self.gbdt_cv_list.append(gbdt_base)
         folder_err = np.array(folder_err_list)
         return np.mean(folder_err), folder_err
 
     def get_cv_model(self):
-        return self.lgbm_cv_list
+        return self.gbdt_cv_list
 
     def save_cv_model_file(self, filename):
         save_pickle(filename, self.get_cv_model())
 
     def load_param_file(self, filename):
-        lgbm_cv = load_pickle(filename)
-        self.lgbm_cv_list = lgbm_cv
+        gbdt_cv = load_pickle(filename)
+        self.gbdt_cv_list = gbdt_cv
 
 
-class LightGBMGridCVBase:
+class GBDTGridCVBase:
 
     def __init__(self, k, param_dict):
         self.k = k
@@ -204,16 +219,16 @@ class LightGBMGridCVBase:
         permutations_dicts = [dict(zip(keys, v)) for v in itertools.product(*values)]
         cv_result = []
         for param in tqdm(permutations_dicts):
-            lgbm_base = self.get_lgbm(param)
-            cv_lgbm = LightGBMCV(self.k, lgbm_base)
-            err_mean, err_list = cv_lgbm.cv(data_df, df_column, spliter, evaluate_func,
+            gbdt_base = self.get_gbdt(param)
+            cv_gbdt = GBDTCV(self.k, gbdt_base)
+            err_mean, err_list = cv_gbdt.cv(data_df, df_column, spliter, evaluate_func,
                                             inv_col=inv_col, time_col=time_col,
                                             need_split=False,
                                             early_stopping_rounds=early_stopping_rounds,
                                             verbose=verbose,
                                             **kwargs)
             cv_result.append((err_mean, err_list))
-            self.cv_model_list.append(cv_lgbm)
+            self.cv_model_list.append(cv_gbdt)
         return generate_cv_result_df(cv_result, permutations_dicts)
 
     def get_cv_model(self, idx):
@@ -225,26 +240,26 @@ class LightGBMGridCVBase:
     def save_cv_model_list_file(self, filename):
         save_pickle(filename, self.get_cv_model_list())
 
-    def get_lgbm(self, param):
+    def get_gbdt(self, param):
         """
         User should write their own function to get dnn_list & optimizer_list from param
-        with "from lightgbm import * (LightGBM sklearn API)"
+        with "from lightgbm import * (LightGBM sklearn API or other gbdt library)"
         """
-        lgbm = None
-        return lgbm
+        gbdt = None
+        return gbdt
 
 
-class LightGBMGridCVBase_Example(LightGBMGridCVBase):
+class GBDTGridCVBase_Example(GBDTGridCVBase):
 
     def __init__(self, k, param_dict):
-        super(LightGBMGridCVBase_Example, self).__init__(k, param_dict)
+        super(GBDTGridCVBase_Example, self).__init__(k, param_dict)
 
-    def get_lgbm(self, param):
-        lgbm = LGBMRegressor(
+    def get_gbdt(self, param):
+        gbdt = LGBMRegressor(
             boosting_type='gbdt',
             objective='regression',
             n_estimators=100,
             learning_rate=param['learning_rate'],
             max_depth=param['max_depth']
         )
-        return lgbm
+        return gbdt

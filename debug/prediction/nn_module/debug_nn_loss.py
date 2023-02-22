@@ -1,6 +1,6 @@
 import torch
 
-from quant_finance_research.eval.nn_loss import *
+from quant_finance_research.prediction.nn_module.nn_loss import *
 from quant_finance_research.eval.factor_eval import *
 import numpy as np
 import pandas as pd

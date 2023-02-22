@@ -8,8 +8,8 @@ import time
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
-from quant_finance_research.utils import generate_cv_result_df, save_pickle, load_pickle, \
-    get_numpy_from_df_train_val
+from quant_finance_research.prediction.prediction_utils import *
+from quant_finance_research.utils import save_pickle, load_pickle
 from quant_finance_research.fe.fe_utils import update_df_column_package
 
 
@@ -525,7 +525,7 @@ class NeuralNetworkGridCV_Example(NeuralNetworkGridCVBase):
         """
         User should write their own function to get dnn_list & optimizer_list from param
         """
-        from ..model.base_dnn import Base_DNN
+        from nn.base_dnn import Base_DNN
         dnn_list = []
         optimizer_list = []
         param = {'learning_rate': 0.1}

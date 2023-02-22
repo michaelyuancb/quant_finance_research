@@ -6,7 +6,7 @@ from tqdm import tqdm
 from datetime import datetime
 
 from quant_finance_research.utils import get_example_df
-from quant_finance_research.strategy.tscv import *
+from quant_finance_research.prediction.tscv import *
 
 
 class DebugQuantTimeSplit_SeqHorizon:

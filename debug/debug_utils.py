@@ -29,6 +29,22 @@ def debug_get_example_large_df():
     print(df.iloc[:, df_column['loss']].values.sum())
 
 
+def debug_get_example_cat_df():
+    df, df_column = get_example_cat_df()
+    print(df)
+    print(df_column)
+    print(df.iloc[:, df_column['loss']].values.sum())
+
+
+def debug_get_example_cat_matrix():
+    x, y, idx = get_example_cat_matrix()
+    print(x)
+    print(x[:, idx['index_cat']])
+    print(x.shape)
+    print(y.shape)
+    print(idx)
+
+
 def debug_datetime2int():
     dtt = datetime.strptime("2022-02-17 11:11:05", "%Y-%m-%d %H:%M:%S")
     print(dtt)
@@ -73,32 +89,15 @@ def debug_transfer_numpy_cpu():
     print(type(transfer_numpy_cpu(z)))
 
 
-def debug_generate_cv_result_df():
-    cv_result = [np.array([0.8, 0.5, 0.3]), np.array([0.8, 0.6, 0.25]), np.array([0.7, 0.5, 0.4])]
-    for i in range(len(cv_result)):
-        cv_result[i] = (np.mean(cv_result[i]), cv_result[i])
-    param_combination = [{"lr": 0.1, "pn": 3}, {"lr": 0.1, "pn": 4}, {"lr": 0.01, "pn": 3}]
-    cv_df = generate_cv_result_df(cv_result, param_combination)
-    print(cv_df)
-
-
-def debug_get_numpy_from_df_train_val():
-    df, df_column = get_example_df()
-    xtrain, ytrain, xval, yval = get_numpy_from_df_train_val(df, df, df_column)
-    print(xtrain.shape)
-    print(ytrain.shape)
-    print(xval.shape)
-    print(yval.shape)
-
-
 if __name__ == "__main__":
     # debug_set_seed()
     # debug_set_df_continue_index()
-    # debug_get_example_df()
-    # debug_get_example_large_df()
     # debug_datetime2int()
     # debug_list_datetime2int()
-    debug_seq_data_transform()
+    # debug_seq_data_transform()
     # debug_reduce_mem_usage_df()
     # debug_transfer_numpy_cpu()
-    # debug_get_numpy_from_df_train_val()
+    # debug_get_example_df()
+    # debug_get_example_large_df()
+    # debug_get_example_cat_df()
+    debug_get_example_cat_matrix()

@@ -20,78 +20,6 @@ def set_df_continue_index(df):
     df.index = range(len(df))
 
 
-def get_example_df():
-    v = np.array([[1, 0, 1, 2, 1], [2, 0, 3, 2, 3], [1, 1, 4, 5, 4], [3, 0, 3, 3, 3], [1, 2, 0, 5, 0],
-                  [2, 1, 0, 3, 0],
-                  [4, 2, 1, 1, 1], [4, 0, 2, 1, 2], [4, 3, 4, 0, 4], [4, 1, 4, 1, 4.1], [5, 1, 0, 1, 0],
-                  [5, 3, 4, 1, 4]])
-    v[:, 0] = v[:, 1]
-    dt = [
-        datetime.strptime("2022-11-1", "%Y-%m-%d"),
-        datetime.strptime("2022-11-2", "%Y-%m-%d"),
-        datetime.strptime("2022-11-1", "%Y-%m-%d"),
-        datetime.strptime("2022-11-4", "%Y-%m-%d"),
-        datetime.strptime("2022-11-1", "%Y-%m-%d"),
-        datetime.strptime("2022-11-2", "%Y-%m-%d"),
-        datetime.strptime("2022-11-9", "%Y-%m-%d"),
-        datetime.strptime("2022-11-9", "%Y-%m-%d"),
-        datetime.strptime("2022-11-9", "%Y-%m-%d"),
-        datetime.strptime("2022-11-9", "%Y-%m-%d"),
-        datetime.strptime("2022-11-10", "%Y-%m-%d"),
-        datetime.strptime("2022-11-10", "%Y-%m-%d")
-    ]
-    np.random.seed(0)
-    weight = np.array([0.1, 0.05, 0.05, 0.1, 0.2, 0.02, 0.08, 0.15, 0.05, 0.1, 0.04, 0.06]).reshape(-1, 1)
-    dt = np.array(dt)
-    df_t = pd.DataFrame(np.concatenate([v, weight], axis=1),
-                        columns=['time_id', 'investment_id', 'factor_0', 'factor_1', 'target', 'weight'])
-    df_t['investment_id'] = df_t['investment_id'].astype(np.int32)
-    df_t.iloc[:, 0] = pd.Series(dt)
-    x_column = [2, 3]
-    y_column = [4]
-    loss_column = [5]
-    df_column = {"x": x_column, "y": y_column, "loss": loss_column}
-    return df_t, df_column
-
-
-def get_example_large_df():
-    v = np.array([[1, 0, 1, 2, 1], [2, 0, 3, 2, 3], [1, 1, 4, 5, 4], [3, 0, 3, 3, 3], [1, 2, 0, 5, 0],
-                  [2, 1, 0, 3, 0],
-                  [4, 2, 1, 1, 1], [4, 0, 2, 1, 2], [4, 3, 4, 0, 4], [4, 1, 4, 1, 100], [5, 1, 0, 1, 0],
-                  [5, 3, 4, 1, 3]])
-    v = v[:, :2]
-    dt = [
-        datetime.strptime("2022-11-1", "%Y-%m-%d"),
-        datetime.strptime("2022-11-2", "%Y-%m-%d"),
-        datetime.strptime("2022-11-1", "%Y-%m-%d"),
-        datetime.strptime("2022-11-4", "%Y-%m-%d"),
-        datetime.strptime("2022-11-1", "%Y-%m-%d"),
-        datetime.strptime("2022-11-2", "%Y-%m-%d"),
-        datetime.strptime("2022-11-9", "%Y-%m-%d"),
-        datetime.strptime("2022-11-9", "%Y-%m-%d"),
-        datetime.strptime("2022-11-9", "%Y-%m-%d"),
-        datetime.strptime("2022-11-9", "%Y-%m-%d"),
-        datetime.strptime("2022-11-10", "%Y-%m-%d"),
-        datetime.strptime("2022-11-10", "%Y-%m-%d")
-    ]
-    n = len(dt)
-    extra_x = np.random.randn(n, 201)
-    v = np.concatenate([v, extra_x], axis=1)
-    np.random.seed(0)
-    weight = np.array([0.1, 0.05, 0.05, 0.1, 0.2, 0.02, 0.08, 0.15, 0.05, 0.1, 0.04, 0.06]).reshape(-1, 1)
-    cls = ['time_id', 'investment_id'] + ['factor_' + str(i) for i in range(200)] + ['target'] + ['weight']
-    dt = np.array(dt)
-    df_t = pd.DataFrame(np.concatenate([np.array(v), weight], axis=1),
-                        columns=cls)
-    df_t['investment_id'] = df_t['investment_id'].astype(np.int32)
-    df_t.iloc[:, 0] = pd.Series(dt)
-    x_column = [i for i in range(2, 202)]
-    y_column = [202]
-    loss_column = [203]
-    df_column = {"x": x_column, "y": y_column, "loss": loss_column}
-    return df_t, df_column
-
-
 def datetime2int(date):
     st = datetime.strftime(date, "%Y%m%d%H%M%S")
     return int(st)
@@ -183,34 +111,6 @@ def transfer_numpy_cpu(x):
         raise TypeError(f"Unknown type for {tp}")
 
 
-def generate_cv_result_df(cv_result, param_combination):
-    # cv_result:  list of (np.float, np.array(k, ))
-    column = list(param_combination[0].keys())
-    param_np = []
-    for dct in param_combination:
-        param_np.append(list(dct.values()))
-    param_np = np.array(param_np)
-    column = column + ['mean'] + ['std']
-    result_np = []
-    for mn, rlist in cv_result:
-        lst = [mn, np.std(rlist)] + np.round(rlist, 5).tolist()
-        result_np.append(lst)
-    column = column + ['cv_' + str(i) for i in range(rlist.shape[0])]
-    result_np = np.concatenate([param_np, result_np], axis=1)
-    cv_result_df = pd.DataFrame(result_np, columns=column)
-    return cv_result_df
-
-
-def get_numpy_from_df_train_val(train_df, val_df, df_column):
-    x_column = df_column['x']
-    y_column = df_column['y']
-    xtrain = train_df.iloc[:, x_column].values
-    ytrain = train_df.iloc[:, y_column].values
-    xval = val_df.iloc[:, x_column].values
-    yval = val_df.iloc[:, y_column].values
-    return xtrain, ytrain, xval, yval
-
-
 def copy_model_list(model, k):
     model_list = []
     for i in range(k):
@@ -218,10 +118,89 @@ def copy_model_list(model, k):
     return model_list
 
 
-if __name__ == "__main__":
-    x = np.array([1, 2, 3])
-    y = torch.tensor([4, 5, 6])
-    z = torch.tensor([7, 8, 9]).to('cuda')
-    print(transfer_numpy_cpu(x))
-    print(transfer_numpy_cpu(y))
-    print(transfer_numpy_cpu(z))
+def _get_example_vdt_base():
+    v = np.array([[1, 0, 1, 2, 1], [2, 0, 3, 2, 3], [1, 1, 4, 5, 4], [3, 0, 3, 3, 3], [1, 2, 0, 5, 0],
+                  [2, 1, 0, 3, 0],
+                  [4, 2, 1, 1, 1], [4, 0, 2, 1, 2], [4, 3, 4, 0, 4], [4, 1, 4, 1, 4.1], [5, 1, 0, 1, 0],
+                  [5, 3, 4, 1, 4]])
+    v[:, 0] = v[:, 1]
+    dt = [
+        datetime.strptime("2022-11-1", "%Y-%m-%d"), datetime.strptime("2022-11-2", "%Y-%m-%d"),
+        datetime.strptime("2022-11-1", "%Y-%m-%d"), datetime.strptime("2022-11-4", "%Y-%m-%d"),
+        datetime.strptime("2022-11-1", "%Y-%m-%d"), datetime.strptime("2022-11-2", "%Y-%m-%d"),
+        datetime.strptime("2022-11-9", "%Y-%m-%d"), datetime.strptime("2022-11-9", "%Y-%m-%d"),
+        datetime.strptime("2022-11-9", "%Y-%m-%d"), datetime.strptime("2022-11-9", "%Y-%m-%d"),
+        datetime.strptime("2022-11-10", "%Y-%m-%d"), datetime.strptime("2022-11-10", "%Y-%m-%d")
+    ]
+    return v, dt
+
+
+def get_example_df():
+    v, dt = _get_example_vdt_base()
+    np.random.seed(0)
+    weight = np.array([0.1, 0.05, 0.05, 0.1, 0.2, 0.02, 0.08, 0.15, 0.05, 0.1, 0.04, 0.06]).reshape(-1, 1)
+    dt = np.array(dt)
+    df_t = pd.DataFrame(np.concatenate([v, weight], axis=1),
+                        columns=['time_id', 'investment_id', 'factor_0', 'factor_1', 'target', 'weight'])
+    df_t['investment_id'] = df_t['investment_id'].astype(np.int32)
+    df_t.iloc[:, 0] = pd.Series(dt)
+    x_column = [2, 3]
+    y_column = [4]
+    loss_column = [5]
+    df_column = {"x": x_column, "y": y_column, "loss": loss_column}
+    return df_t, df_column
+
+
+def get_example_large_df():
+    v, dt = _get_example_vdt_base()
+    n = len(dt)
+    extra_x = np.random.randn(n, 201)
+    v = np.concatenate([v, extra_x], axis=1)
+    np.random.seed(0)
+    weight = np.array([0.1, 0.05, 0.05, 0.1, 0.2, 0.02, 0.08, 0.15, 0.05, 0.1, 0.04, 0.06]).reshape(-1, 1)
+    cls = ['time_id', 'investment_id'] + ['factor_' + str(i) for i in range(200)] + ['target'] + ['weight']
+    dt = np.array(dt)
+    df_t = pd.DataFrame(np.concatenate([np.array(v), weight], axis=1),
+                        columns=cls)
+    df_t['investment_id'] = df_t['investment_id'].astype(np.int32)
+    df_t.iloc[:, 0] = pd.Series(dt)
+    x_column = [i for i in range(2, 202)]
+    y_column = [202]
+    loss_column = [203]
+    df_column = {"x": x_column, "y": y_column, "loss": loss_column}
+    return df_t, df_column
+
+
+def get_example_cat_df():
+    df, df_column = get_example_df()
+    class_1 = np.array(["A", "B", "A", "C", "A", "B", "B", "D", "C", "C", "B", "C"])
+    class_2 = np.array([1, 2, 1, 3, 1, 2, 2, 4, 3, 3, 2, 3])
+    cls = df_column['x'] + [df.shape[1], df.shape[1]+1]
+    df_column['x'] = cls
+    dfx = np.array([class_1, class_2]).T
+    dfx[:, 1] = dfx[:, 1].astype(np.int32)
+    cls_pd = pd.DataFrame(dfx, columns=['cls_factor_1', 'cls_factor_2'])
+    df = pd.concat([df, cls_pd], axis=1)
+    df.iloc[:, -1] = df.iloc[:, -1].astype(np.int32)
+    return df, df_column
+
+
+def get_example_cat_matrix():
+    def get_cat(n, ofs=0):
+        lst = []
+        for i in range(n):
+            t = np.random.randint(0, 3)
+            if t == 0:
+                lst.append(ofs)
+            elif t == 1:
+                lst.append(ofs+1)
+            else:
+                lst.append(ofs+2)
+        return np.array(lst).reshape(-1, 1)
+
+    X = np.concatenate([np.random.randn(50, 3), get_cat(50, ofs=0),
+                        np.random.randn(50, 1), get_cat(50, ofs=3), get_cat(50, ofs=6)], axis=1)
+    y = np.random.randn(50, 1)
+
+    return X, y, {'index_num': [0, 1, 2, 4], 'index_cat': [3, 5, 6]}
+

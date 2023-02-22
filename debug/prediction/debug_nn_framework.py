@@ -2,12 +2,12 @@ import numpy as np
 import torch.nn
 
 from quant_finance_research.utils import *
-from quant_finance_research.strategy.nn import *
-from quant_finance_research.model.base_dnn import *
-from quant_finance_research.strategy.tscv import *
+from quant_finance_research.prediction.nn_framework import *
+from quant_finance_research.prediction.nn.base_dnn import Base_DNN
+from quant_finance_research.prediction.tscv import *
 from quant_finance_research.fe.fe_val import *
 from quant_finance_research.fe.fe_feat import *
-from quant_finance_research.eval.nn_loss import *
+from quant_finance_research.prediction.nn_module.nn_loss import *
 
 
 def get_debug_dnn(input_dim=None, output_dim=None):
@@ -187,7 +187,6 @@ class NeuralNetworkGridCV_Debug(NeuralNetworkGridCVBase):
         """
         User should write their own function to get dnn_list & optimizer_list from param
         """
-        from quant_finance_research.model.base_dnn import Base_DNN
         dnn_list = []
         optimizer_list = []
         param = {'learning_rate': 0.1}
