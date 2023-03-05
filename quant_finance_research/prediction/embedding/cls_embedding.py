@@ -53,11 +53,9 @@ class CLS_Embedding(Basic_Embedding):
         if index_cat is not None:
             self.category_embeddings = nn.Embedding(total_n_cat, d_token)
             nn_init.kaiming_uniform_(self.category_embeddings.weight, a=math.sqrt(5))
-            print(f'{self.category_embeddings.weight.shape=}')
 
     def forward(self, x) -> Tensor:
         x = self.index_sort_func(x)
-        print(self.d_num)
         x_num = torch.cat([torch.ones(len(x), 1, device=x.device)] +
                           [x[:, :self.d_num]] if self.d_num > 0 else [], dim=1)
         x_cls = self.weight[None] * x_num[:, :, None]

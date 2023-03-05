@@ -70,9 +70,25 @@ def debug_add_GlobalAbsIcRank_LocalTimeMeanFactor():
     print("success.")
 
 
+def debug_build_portfolio():
+    df, df_column = get_example_df()
+    print(df)
+    df_val = copy.deepcopy(df)
+    df, pro_pack = build_portfolio(df, df_column, df_column['x'],
+                                   build_portfolio_weight=np.array([[0.4, 0.6], [0.1, 0.9], [0.05, 0.2]]),
+                                   name_prefix='test_portfolio_',
+                                   inplace=True)
+    print(df)
+    print(pro_pack)
+    df_val, _ = build_portfolio(df_val, df_column, df_column['x'], **pro_pack)
+    assert (df.values == df_val.values).all()
+    print("success.")
+
+
 if __name__ == "__main__":
-    debug_delete_Feature()
-    debug_delete_NanRatio_Feature()
-    debug_find_GlobalAbsIcRank()
-    debug_add_LocalTimeMeanFactor()
-    debug_add_GlobalAbsIcRank_LocalTimeMeanFactor()
+    # debug_delete_Feature()
+    # debug_delete_NanRatio_Feature()
+    # debug_find_GlobalAbsIcRank()
+    # debug_add_LocalTimeMeanFactor()
+    # debug_add_GlobalAbsIcRank_LocalTimeMeanFactor()
+    debug_build_portfolio()

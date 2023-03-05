@@ -92,6 +92,7 @@ class NeuralNetworkWrapper:
         self.val_loss = []
         self.best_loss = []
         self.device = device
+        self.n_feature = None
 
     def training(self, dataloader, loss_func, use_loss_column=False):
         self.nn.train()
@@ -150,6 +151,7 @@ class NeuralNetworkWrapper:
               batch_size=2048,
               **kwargs):
         xtrain, ytrain, xval, yval = get_numpy_from_df_train_val(train_df, val_df, df_column)
+        self.n_feature = xtrain.shape[1:]
         dnn_set_seed(seed)
         if not use_loss_column:
             train_loader = DataLoader(TabDataset(xtrain, ytrain), batch_size=batch_size, shuffle=True,
@@ -177,7 +179,7 @@ class NeuralNetworkWrapper:
             eph_start = time.time()
             loss_train = self.training(train_loader, loss_func, use_loss_column)
             loss_val = self.evaluate(val_loader, loss_func, use_loss_column)
-            if loss_val <= loss_val_best:
+            if loss_val < loss_val_best:
                 loss_val_best = loss_val
                 self.best_param = self.nn.state_dict()
                 count = 0
@@ -208,6 +210,9 @@ class NeuralNetworkWrapper:
         x_column = df_column['x']
         self.load_param(self.best_param)
         xtest = test_df.iloc[:, x_column].values
+        if (self.n_feature is not None) and (xtest.shape[1:] != self.n_feature):
+            raise ValueError(f"The Train Feature Dim={self.n_feature}, But the Test Feature Dim={xtest.shape[1:]}. "
+                             f"They should be the same.")
         self.nn.eval()
         pred = []
         n_test = xtest.shape[0]
@@ -369,7 +374,10 @@ class NeuralNetworkCVEnsemble(NeuralNetworkEnsembleBase):
         predict_val = []
         for i in tqdm(range(self.n_dnn)):
             if spliter is not None:
-                xtest_df, _ = spliter.get_folder_preprocess(test_df, i)
+                if hasattr(spliter, "get_folder_preprocess"):
+                    xtest_df, _ = spliter.get_folder_preprocess(test_df, i)
+                else:
+                    xtest_df = test_df
                 if hasattr(spliter, "get_folder_preprocess_package"):
                     pro_package = spliter.get_folder_preprocess_package(i)
                     df_column = update_df_column_package(df_column, pro_package)
@@ -464,6 +472,7 @@ class NeuralNetworkGridCVBase(abc.ABC):
         """
          # Notice that if spliter is QTS_PreprocessSplit, then **kwargs is used to transport preprocess parameters.
         """
+        print(f"Num_wokers={num_workers}")
         assert spliter.get_k() == self.k
         if need_split:
             spliter.split(data_df, inv_col=inv_col, time_col=time_col)
@@ -530,7 +539,7 @@ class NeuralNetworkGridCV_Example(NeuralNetworkGridCVBase):
         optimizer_list = []
         param = {'learning_rate': 0.1}
         for i in range(self.k):
-            dnn = Base_DNN(input_dim=5, hidden_dim=5, dropout_rate=0)
+            dnn = Base_DNN(input_dim=5, hidden_dim=5, output_dim=1, dropout_rate=0)
             optim = torch.optim.Adam(dnn.parameters(), lr=param['learning_rate'])
             dnn_list.append(dnn)
             optimizer_list.append(optim)

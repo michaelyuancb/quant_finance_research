@@ -34,6 +34,6 @@ def debug_eda_factor_ic_analysis():
 
 
 if __name__ == "__main__":
-    debug_eda_data_type()
+    # debug_eda_data_type()
     # debug_eda_nan_analysis()
-    # debug_eda_factor_ic_analysis()
+    debug_eda_factor_ic_analysis()

@@ -25,6 +25,19 @@ def debug_zscore_normalize_preprocess():
     print("success")
 
 
+def debug_panel_time_zscore_normalize_preprocess():
+    df, df_column = get_example_df()
+    df_val = df.copy()
+    print(df)
+    df, package = panel_time_zscore_normalize_preprocess(df, df_column, column=df_column['x'], time_col='time_id')
+    print(package)
+    print(df)
+    print(df[['time_id']+df.columns[df_column['x']].tolist()].groupby('time_id').sum())
+    df_val, _ = panel_time_zscore_normalize_preprocess(df_val, df_column, df_column['x'], **package)
+    assert (df_val.values == df.values).all()
+    print("success")
+
+
 def debug_zscore_normalize_inverse_preprocess():
     df, df_column = get_example_df()
     df_org = df.copy()
@@ -92,10 +105,11 @@ def debug_classic_x_preprocess_package_1():
 
 
 if __name__ == "__main__":
-    debug_mad_preprocess()
+    # debug_mad_preprocess()
     # debug_zscore_normalize_preprocess()
+    # debug_panel_time_zscore_normalize_preprocess()
     # debug_zscore_normalize_inverse_preprocess()
     # debug_sumone_normalize_preprocess()
-    # debug_panel_time_sumone_normalize_preprocess()
+    debug_panel_time_sumone_normalize_preprocess()
     # debug_fillna_fixval_preprocess()
     # debug_classic_x_preprocess_package_1()

@@ -179,7 +179,7 @@ class DebugGBDTGridCV:
                                                      preprocess_column=df_column['x'])
 
     def debug_get_model_list(self):
-        lgbm = self.grid_cv.get_lgbm(param={"learning_rate": 0.1, "max_depth": 3})
+        lgbm = self.grid_cv.get_gbdt(param={"learning_rate": 0.1, "max_depth": 3})
         print(lgbm)
 
     def debug_cv(self):
@@ -193,7 +193,7 @@ class DebugGBDTGridCV:
 
 if __name__ == "__main__":
     # DebugGBDTWrapper().debug_all()
-    # DebugGBDTCVEnsemble().debug_all()
+    DebugGBDTCVEnsemble().debug_all()
     # DebugGBDTAvgBaggingEnsemble().debug_all()
     # DebugGBDTCV().debug_cv()
-    DebugGBDTGridCV().debug_cv()
+    # DebugGBDTGridCV().debug_cv()

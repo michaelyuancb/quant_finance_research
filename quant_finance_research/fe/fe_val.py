@@ -60,6 +60,29 @@ def zscore_normalize_preprocess(df_org, df_column, column, zscore_trans_scaler=N
     return df, {"zscore_trans_scaler": zscore_trans_scaler}
 
 
+def panel_time_zscore_normalize_preprocess(df_org, df_column, column, time_col="time_id", **kwargs):
+    df = df_org.copy()
+    df_std = df[[time_col]+df.columns[column].tolist()].groupby(time_col).std()
+    df_mean = df[[time_col]+df.columns[column].tolist()].groupby(time_col).mean()
+    org_name = df_std.columns.tolist()
+    trf_name = {rname: rname+get_tmp_str()+'_mean' for rname in org_name}
+    df_mean = df_mean.rename(columns=trf_name)
+    trf_name = {rname: rname+get_tmp_str()+'_std' for rname in org_name}
+    df_std = df_std.rename(columns=trf_name)
+    df = pd.merge(df, df_mean, how='left', left_on=time_col, right_on=time_col)
+    df = pd.merge(df, df_std, how='left', left_on=time_col, right_on=time_col)
+    del df_mean, df_std
+    del_name = []
+    for org_name, std_name in trf_name.items():
+        mean_name = org_name + get_tmp_str() + '_mean'
+        df[org_name] = (df[org_name] - df[mean_name]) / df[std_name].apply(
+            lambda x: 1.0 if x == 0 or np.isnan(x) else x)
+        del_name.append(mean_name)
+        del_name.append(std_name)
+    df = df.drop(del_name, axis=1)
+    return df, {"time_col": time_col}
+
+
 # Inverse Zscore
 def zscore_normalize_inverse_preprocess(df_org, df_column, column, zscore_rev_scaler, **kwargs):
     """
@@ -89,10 +112,11 @@ def panel_time_sumone_normalize_preprocess(df_org, df_column, column, time_col="
     dfg = dfg.rename(columns=trf_name)
     df = pd.merge(df, dfg, how='left', left_on=time_col, right_on=time_col)
     del dfg
+    del_name = []
     for org_name, tname in trf_name.items():
         df[org_name] = df[org_name] / df[tname].apply(lambda x: 1.0 if x == 0 else x)
-    for tname in trf_name.values():
-        del df[tname]
+        del_name.append(tname)
+    df = df.drop(del_name, axis=1)
     return df, {"time_col": time_col}
 
 

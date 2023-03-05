@@ -9,6 +9,19 @@ from quant_finance_research.utils import get_example_df
 from quant_finance_research.prediction.tscv import *
 
 
+class DebugQuantTimeSplit_NormalTimeCut:
+
+    def debug_get_folder(self):
+        df, df_column = get_example_df()
+        fsplit = QuantTimeSplit_NormalTimeCut(val_ratio=0.5)
+        fsplit.split(df)
+        train_df, test_df = fsplit.get_folder(df, folder_idx=0)
+        print(train_df)
+        print(test_df)
+        print(train_df.values.shape)
+        print(test_df.values.shape)
+
+
 class DebugQuantTimeSplit_SeqHorizon:
 
     def debug_get_folder(self):
@@ -26,6 +39,7 @@ class DebugQuantTimeSplit_SeqPast:
 
     def debug_get_folder(self):
         df, df_column = get_example_df()
+        df.index = [100, 20, 1, 0, 4, 3, 123, 43, 432, 2222, 111, 11342]
         fsplit = QuantTimeSplit_SeqPast(k=3)
         fsplit.split(df)
         train_df, test_df = fsplit.get_folder(df, folder_idx=2)
@@ -39,9 +53,10 @@ class DebugQuantTimeSplit_GroupTime:
 
     def debug_get_folder(self):
         df, df_column = get_example_df()
+        df.index = [100, 20, 1, 0, 4, 3, 123, 43, 432, 2222, 111, 11342]
         fsplit = QuantTimeSplit_GroupTime(k=4)
         fsplit.split(df)
-        train_df, test_df = fsplit.get_folder(df, folder_idx=3)
+        train_df, test_df = fsplit.get_folder(df, folder_idx=2)
         print(train_df)
         print(test_df)
         print(train_df.values.shape)
@@ -115,11 +130,25 @@ class DebugQuantTimeSplit_PreprocessSplit:
         print(dff)
 
 
+class DebugQuantTimeSplit_RollingPredict:
+    def debug_get_folder(self):
+        df, df_column = get_example_df()
+        fsplit = QuantTimeSplit_RollingPredict(k=4)
+        fsplit.split(df, df)
+        train_df, test_df = fsplit.get_folder(df, df, folder_idx=3)
+        print(train_df)
+        print(test_df)
+        print(train_df.values.shape)
+        print(test_df.values.shape)
+
+
 if __name__ == "__main__":
+    # DebugQuantTimeSplit_NormalTimeCut().debug_get_folder()
     # DebugQuantTimeSplit_SeqHorizon().debug_get_folder()
     # DebugQuantTimeSplit_SeqPast().debug_get_folder()
     # DebugQuantTimeSplit_GroupTime().debug_get_folder()
     # DebugQuantTimeSplit_PurgeSeqHorizon().debug_get_folder()
     # DebugQuantTimeSplit_PurgeSeqPast().debug_get_folder()
     # DebugQuantTimeSplit_PurgeGroupTime().debug_get_folder()
-    DebugQuantTimeSplit_PreprocessSplit().debug_get_folder()
+    # DebugQuantTimeSplit_PreprocessSplit().debug_get_folder()
+    DebugQuantTimeSplit_RollingPredict().debug_get_folder()

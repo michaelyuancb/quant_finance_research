@@ -2,6 +2,23 @@ import pandas as pd
 import numpy as np
 
 
+def eda_basic_sketch(df, df_column, time_col='time_id', inv_col='investment_id', target_col=None):
+    target_col = target_col if target_col is not None else df.columns[df_column['y'][0]]
+    print(df.columns)
+    obs = df.shape[0]
+    print(f"number of observations: {obs}")
+    time_steps, assets = df[time_col].nunique(), df[inv_col].nunique()
+    print(f"number of assets: {assets} \t time steps: {time_steps}")
+    print(f"number of assets: {assets} (range from {df[inv_col].min()} to {df[inv_col].max()})")
+    print(f"number of time steps: {time_steps} (range from {df[time_col].min()} to {df[time_col].max()})")
+
+    r = np.corrcoef(df.groupby(time_col)[inv_col].nunique(), df.groupby(time_col)[target_col].mean())[0][1]
+    print(f"Correlation of [Number of Assets] by [Target Mean]: {r:0.5f}")
+
+    r = np.corrcoef(df.groupby(time_col)[inv_col].nunique(), df.groupby(time_col)[target_col].std())[0][1]
+    print(f"Correlation of [Number of Assets] by [Target Std]: {r:0.5f}")
+
+
 def eda_data_type(df, df_column, print_result=True):
     """
         Analysis the data-type of column_x, column_y, column_loss.
@@ -88,8 +105,9 @@ def eda_factor_ic_analysis(data_df, df_column, print_result=True):
 
     corr = data_df[x_name + y_name].corr()[y_name].drop(labels=y_name).reset_index()
     corr[y_name] = abs(corr[y_name])
-    corr = pd.concat([corr, pd.DataFrame(x_column)], axis=1)
-    corr.sort_values(y_name, ascending=False, inplace=True)
+    corr = pd.concat([corr, pd.DataFrame(x_column, index=corr.index)], axis=1)
+    corr['GlobalAbsIcScore'] = corr[y_name].apply(lambda x: x.mean(), axis=1)
+    corr.sort_values('GlobalAbsIcScore', ascending=False, inplace=True)
     corr = corr.rename(columns={0: 'x_column_idx'})
     if print_result:
         print("=========================== eda_nan_analysis ===========================")

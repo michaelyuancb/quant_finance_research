@@ -191,7 +191,7 @@ class NeuralNetworkGridCV_Debug(NeuralNetworkGridCVBase):
         optimizer_list = []
         param = {'learning_rate': 0.1}
         for i in range(self.k):
-            dnn = Base_DNN(input_dim=2, hidden_dim=1, dropout_rate=0)
+            dnn = Base_DNN(input_dim=2, hidden_dim=1, output_dim=1, dropout_rate=0)
             optim = torch.optim.Adam(dnn.parameters(), lr=param['learning_rate'])
             dnn_list.append(dnn)
             optimizer_list.append(optim)
@@ -231,7 +231,7 @@ class DebugNeuralNetworkGridCV:
 if __name__ == "__main__":
     # DebugNeuralNetworkWrapper().debug_all()
     # DebugNeuralNetworkAvgBaggingEnsemble().debug_all()
-    # DebugNeuralNetworkCVEnsemble().debug_all()
+    DebugNeuralNetworkCVEnsemble().debug_all()
     # DebugNeuralNetworkCV().debug_cv()
-    DebugNeuralNetworkGridCV().debug_cv()
+    # DebugNeuralNetworkGridCV().debug_cv()
 

@@ -47,28 +47,30 @@ def delete_NanRatio_Feature(df_org, df_column, column, del_nan_ratio, del_idx=No
 
 def find_GlobalAbsIcRank(df_org, df_column, column, number_GAIR, column_GAIR=None, **kwargs):
     """
-        Find the feature ranked 1~number on the abc(IC) of the whole DataFrame,
+        Find the feature ranked 1~number on the abc(IC) of the column,
+        The IC is calculated with df_column['y'],
+        when len(df_column['y'])>0, the rank is according to the average performance.
     """
     data_df = df_org.copy()
     x_column, y_column, loss_column = df_column.values()
     if column_GAIR is None:
         column_name = data_df.columns[column].tolist()
         y_name = data_df.columns[y_column].tolist()
-
         corr = data_df[column_name + y_name].corr()[y_name].drop(labels=y_name).reset_index()
         corr[y_name] = abs(corr[y_name])
-        corr = pd.concat([corr, pd.DataFrame(x_column)], axis=1)
-        corr.sort_values(y_name, ascending=False, inplace=True)
+        corr = pd.concat([corr, pd.DataFrame(x_column, index=corr.index)], axis=1)
+        corr['GlobalAbsIcScore'] = corr[y_name].apply(lambda x: x.mean(), axis=1)
+        corr.sort_values(by='GlobalAbsIcScore', ascending=False, inplace=True)
         if number_GAIR > corr.shape[0]:
             raise ValueError(
                 f"The required mean-factor number={number_GAIR} is larger than the factor number {corr.shape[0]}.")
-        column_GAIR = corr.iloc[:number_GAIR, 2].to_list()
+        column_GAIR = corr.iloc[:number_GAIR, -2].to_list()
     return data_df, {"df_column_new": df_column, "column_GAIR": column_GAIR, "number_GAIR": number_GAIR}
 
 
 def add_LocalTimeMeanFactor(df_org, df_column, column, time_col='time_id', **kwargs):
     """
-        Generate the mean-factor of each timestamps for fe_column. (mean of all investment for each time-stamps)
+        Generate the mean-factor of each timestamps for column. (mean of all investment for each time-stamps)
     """
     data_df = df_org.copy()
     x_column, y_column, loss_column = df_column.values()
@@ -80,10 +82,11 @@ def add_LocalTimeMeanFactor(df_org, df_column, column, time_col='time_id', **kwa
     df_mean = df_mean.rename(columns=mean_name_dict)
     data_df = pd.merge(data_df, df_mean, on=time_col, how='inner')
     width_2 = data_df.shape[1]
-    x_column = x_column + [i for i in range(width_1, width_2)]
+    new_column_idx = [i for i in range(width_1, width_2)]
+    x_column = x_column + new_column_idx
     df_column_new = {"x": x_column, "y": y_column, "loss": loss_column}
     del df_mean
-    return data_df, {"df_column_new": df_column_new, "time_col": time_col}
+    return data_df, {"df_column_new": df_column_new, "time_col": time_col, "new_column_idx": new_column_idx}
 
 
 def add_GlobalAbsIcRank_LocalTimeMeanFactor(df_org, df_column, column, number_GAIR,
@@ -91,7 +94,9 @@ def add_GlobalAbsIcRank_LocalTimeMeanFactor(df_org, df_column, column, number_GA
                                             column_GAIR=None, **kwargs
                                             ):
     """
-        For the feature ranked 1~number on the abc(IC) of the whole DataFrame,
+        For the feature ranked 1~number on the abc(IC) of the column.
+        The IC is calculated with df_column['y'],
+        when len(df_column['y'])>0, the rank is according to the average performance.
         Generate the mean-factor of each timestamps for those feature. (mean of all investment for each time-stamps)
     """
     data_df = df_org.copy()
@@ -100,3 +105,42 @@ def add_GlobalAbsIcRank_LocalTimeMeanFactor(df_org, df_column, column, number_GA
     data_df, pro_package_2 = add_LocalTimeMeanFactor(data_df, df_column, column_GAIR, time_col=time_col)
     pro_package.update(pro_package_2)
     return data_df, pro_package
+
+
+def build_portfolio(df_org, df_column, column, build_portfolio_weight, name_prefix="default_portfolio_",
+                    inplace=False, **kwargs):
+    """
+    Input
+        ::input df_org.iloc[:, column].values: the [N, M] array, where N is the number of bar,
+                                                                       M is the number of features.
+        ::input portfolio_weight: the [NC, M] array, where NC is the number of portfolio.
+        ::input name_prefix: the name of the portfolio, end with '_'
+        ::input inplace: if True, delete the original column, and update the meta  column list. Default=False.
+    Output
+        ::output df: a new dataframe with new portfolio in the last NC column.
+        ::output df_column_new: match the df.
+    """
+
+    def _inplace_portfolio(df, df_column, column, new_column_idx):
+        new_column_name = df.columns[new_column_idx]
+        df, pro = delete_Feature(df, df_column, column)
+        new_column_idx = find_column_idx(new_column_name, df.columns)
+        return df, pro['df_column_new'], new_column_idx
+
+    df = df_org.copy()
+    if not name_prefix.endswith('_'):
+        raise ValueError(f"The name_prefix should end with '_', but now name_prefix={name_prefix}")
+    assert len(column) == build_portfolio_weight.shape[1]
+    data_val = np.dot(df.iloc[:, column].values, build_portfolio_weight.T).reshape(-1, build_portfolio_weight.shape[0])
+    n_component = data_val.shape[1]
+    portfolio_name = [name_prefix + str(i) for i in range(n_component)]
+    portfolio_df = pd.DataFrame(data_val, columns=portfolio_name, index=df.index)
+    n_org = df.shape[1]
+    df = pd.concat([df, portfolio_df], axis=1)
+    new_column_idx = [n_org+i for i in range(data_val.shape[1])]
+    df_column_new = {"x": df_column['x'] + new_column_idx, "y": df_column['y'],
+                     "loss": df_column['loss']}
+    if inplace:
+        df, df_column_new, new_column_idx = _inplace_portfolio(df, df_column_new, column, new_column_idx)
+    return df, {"df_column_new": df_column_new, "build_portfolio_weight": build_portfolio_weight,
+                "name_prefix": name_prefix, "new_column_idx": new_column_idx, "inplace": inplace}

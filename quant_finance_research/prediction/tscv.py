@@ -2,6 +2,7 @@ import abc
 
 import pandas as pd
 import numpy as np
+import sys
 from datetime import datetime
 
 from sklearn.model_selection import GroupKFold
@@ -34,7 +35,7 @@ class QuantSplit_Base(abc.ABC):
         self.split_idx = []
         self.k = k
 
-    def split(self, df, inv_col='investment_id', time_col='time_id'):
+    def split(self, df, inv_col='investment_id', time_col='time_id', **kwargs):
         """
         :param df: the DataFrame to split
         :param k:
@@ -45,7 +46,7 @@ class QuantSplit_Base(abc.ABC):
         """
         pass
 
-    def get_folder(self, df, folder_idx):
+    def get_folder(self, df, folder_idx, **kwargs):
         """
         :param df: the target DataFrame
         :param folder_idx: the idx of folder, 0 <= folder_idx < k
@@ -57,16 +58,16 @@ class QuantSplit_Base(abc.ABC):
             raise ValueError(f"The folder_idx={folder_idx} is out of range for k={self.k}.")
         train_index = self.split_idx[folder_idx][0]
         test_index = self.split_idx[folder_idx][1]
-        train_df = df.iloc[train_index]
-        test_df = df.iloc[test_index]
+        train_df = df.loc[train_index]
+        test_df = df.loc[test_index]
         return train_df, test_df
 
-    def get_folder_idx(self, folder_idx):
+    def get_folder_idx(self, folder_idx, **kwargs):
         if self.k <= folder_idx:
             raise ValueError(f"The folder_idx={folder_idx} is out of range for k={self.k}.")
         return self.split_idx[folder_idx][0], self.split_idx[folder_idx][1]
 
-    def _split_time_seq(self, df, kk, inv_col='investment_id', time_col='time_id'):
+    def _split_time_seq(self, df, kk, inv_col='investment_id', time_col='time_id', **kwargs):
         time_idx = df[time_col].values
         time_idx = np.sort(np.unique(time_idx))
         n_time_idx = len(time_idx)
@@ -86,6 +87,35 @@ class QuantSplit_Base(abc.ABC):
         return self.seq_time
 
 
+class QuantTimeSplit_NormalTimeCut(QuantSplit_Base):
+    """
+        Split Time Series with Sequence Validation (Same Horizon):
+        val_ratio = [0.5, 0.25, 0.25]
+        [A B C D E F G H I | J K L] ===> (A B C D E F G H I), (J K L)
+    """
+
+    def __init__(self, val_ratio):
+        """
+        :param val_ratio: the ratio of validation set.
+        """
+        k = 1
+        super(QuantTimeSplit_NormalTimeCut, self).__init__(k)
+        self.val_ratio = val_ratio
+
+    def split(self, df, inv_col='investment_id', time_col='time_id', **kwargs):
+        self.clear()
+        time_idx = df[time_col].values
+        time_idx = np.sort(np.unique(time_idx))
+        n_time_idx = len(time_idx)
+        n_train = int(n_time_idx * (1.0 - self.val_ratio))
+        n_test = n_time_idx - n_train
+        print(f"Total TimeStampNum={n_time_idx}, Train TimeStampNum={n_train}, Val TimeStampNum={n_test}")
+        self.seq_time = [time_idx[0], time_idx[n_train]] + ['+inf_time']
+        idx_train = df[df[time_col] < self.seq_time[1]].index
+        idx_val = df[df[time_col] >= self.seq_time[1]].index
+        self.split_idx.append((idx_train, idx_val))
+
+
 class QuantTimeSplit_SeqHorizon(QuantSplit_Base):
     """
         Split Time Series with Sequence Validation (Same Horizon):
@@ -101,7 +131,7 @@ class QuantTimeSplit_SeqHorizon(QuantSplit_Base):
         """
         super(QuantTimeSplit_SeqHorizon, self).__init__(k)
 
-    def split(self, df, inv_col='investment_id', time_col='time_id'):
+    def split(self, df, inv_col='investment_id', time_col='time_id', **kwargs):
         self.clear()
         kk = self.k + 1
         self._split_time_seq(df, kk, inv_col, time_col)
@@ -129,7 +159,7 @@ class QuantTimeSplit_SeqPast(QuantSplit_Base):
         """
         super(QuantTimeSplit_SeqPast, self).__init__(k)
 
-    def split(self, df, inv_col='investment_id', time_col='time_id'):
+    def split(self, df, inv_col='investment_id', time_col='time_id', **kwargs):
         self.clear()
         kk = self.k + 1
         self._split_time_seq(df, kk, inv_col, time_col)
@@ -156,28 +186,28 @@ class QuantTimeSplit_GroupTime(QuantSplit_Base):
         """
         :param k: the number of folder
         """
+        assert k > 1
         super(QuantTimeSplit_GroupTime, self).__init__(k)
         self.seq_time = []
         self.group_index = None
 
-    def split(self, df, inv_col='investment_id', time_col='time_id'):
+    def split(self, df, inv_col='investment_id', time_col='time_id', **kwargs):
         self.clear()
         kk = self.k
         self._split_time_seq(df, kk, inv_col, time_col)
-        group_index_list = []
-        for i in range(self.k):
+        for i in range(0, self.k):
             if i != self.k - 1:
-                idx_v = df[(df[time_col] >= self.seq_time[i]) & (df[time_col] < self.seq_time[i + 1])].index
+                idx_val = df[(df[time_col] >= self.seq_time[i]) & (df[time_col] < self.seq_time[i + 1])].index
             else:
-                idx_v = df[(df[time_col] >= self.seq_time[i])].index
-            group_index_list.append(idx_v)
-        group_index = np.zeros(df.shape[0])
-        # print(group_index_list)
-        for i in range(self.k):
-            group_index[group_index_list[i]] = i
-        self.group_index = group_index
-        kf = GroupKFold(n_splits=self.k)
-        self.split_idx = [sp for sp in kf.split(np.zeros((df.shape[0], 1)), groups=self.group_index)]
+                idx_val = df[(df[time_col] >= self.seq_time[i])].index
+            df_idx_train = None
+            if i - 1 >= 0:
+                df_idx_train = df[time_col] < self.seq_time[i]
+            if i + 1 < self.k:
+                df_tmp = df[time_col] >= self.seq_time[i + 1]
+                df_idx_train = df_tmp if df_idx_train is None else df_idx_train | df_tmp
+            idx_train = df[df_idx_train].index
+            self.split_idx.append((idx_train, idx_val))
 
     def get_group_index(self):
         return self.group_index
@@ -203,7 +233,7 @@ class QuantTimeSplit_PurgeSeqHorizon(QuantSplit_Base):
     def get_gap(self):
         return self.gap
 
-    def split(self, df, inv_col='investment_id', time_col='time_id'):
+    def split(self, df, inv_col='investment_id', time_col='time_id', **kwargs):
         self.clear()
         kk = self.k + self.gap + 1
         self._split_time_seq(df, kk, inv_col, time_col)
@@ -238,7 +268,7 @@ class QuantTimeSplit_PurgeSeqPast(QuantSplit_Base):
     def get_gap(self):
         return self.gap
 
-    def split(self, df, inv_col='investment_id', time_col='time_id'):
+    def split(self, df, inv_col='investment_id', time_col='time_id', **kwargs):
         self.clear()
         kk = self.k + self.gap + 1
         self._split_time_seq(df, kk, inv_col, time_col)
@@ -279,7 +309,7 @@ class QuantTimeSplit_PurgeGroupTime(QuantSplit_Base):
     def get_gap(self):
         return self.gap
 
-    def split(self, df, inv_col='investment_id', time_col='time_id'):
+    def split(self, df, inv_col='investment_id', time_col='time_id', **kwargs):
         self.clear()
         kk = self.k
         self._split_time_seq(df, kk, inv_col, time_col)
@@ -330,9 +360,10 @@ class QuantTimeSplit_PreprocessSplit:
         self.preprocess_package = dict()
 
     def split(self, df, inv_col='investment_id', time_col='time_id'):
+        self.clear()
         self.fsplit.split(df, inv_col=inv_col, time_col=time_col)
 
-    def get_folder(self, df, folder_idx, **kwargs):
+    def get_folder(self, df, folder_idx, verbose=False, **kwargs):
         """
         Process Some Transformation before get the value of train_df & val_df
         :param df:  the target DataFrame
@@ -342,14 +373,15 @@ class QuantTimeSplit_PreprocessSplit:
         train_df, val_df = self.fsplit.get_folder(df, folder_idx)
         package_name = 'pro_package_folder_' + str(folder_idx)
         if package_name not in self.get_preprocess_package().keys():
-            print(f"Generate PreProcessor For Folder-{folder_idx}.")
+            if verbose:
+                print(f"Generate PreProcessor For Folder-{folder_idx}.")
             train_df, pro_package = self.preprocess_func(train_df, self.df_column, self.preprocess_column, **kwargs)
             self.preprocess_package[package_name] = pro_package
         else:
             pro_package = self.get_folder_preprocess_package(folder_idx)
             train_df, _ = self.preprocess_func(train_df, self.df_column, self.preprocess_column,
                                                **pro_package)
-        print(pro_package)
+        # print(pro_package)
         val_df, _ = self.preprocess_func(val_df, self.df_column, self.preprocess_column,
                                          **pro_package)
         return train_df, val_df
@@ -387,6 +419,41 @@ class QuantTimeSplit_PreprocessSplit:
         return self.preprocess_package
 
 
+class QuantTimeSplit_RollingPredict:
+    """
+        A Spliter for Rolling Prediction. Given the insample_df and outsample_df, cut the predict process
+        to k step, in each step TrainingSet={insample_df, outsample_df_train}, TestSet={outsample_df_test}.
+        The Split of outsample_df using the QuantTimeSplit_SeqPast(k-1). The first folder for rolling prediction
+        is TrainingSet={insample_df}, TestSet={outsample_df_test[1/k]}
+    """
+    def __init__(self, k):
+        assert k > 1
+        self.spliter_test = QuantTimeSplit_SeqPast(k=k-1)
+        self.k = k
+
+    def get_k(self):
+        return self.k
+
+    def clear(self):
+        self.spliter_test.clear()
+
+    def reset(self, k):
+        self.spliter_test.reset(k)
+
+    def split(self, insample, outsample, inv_col='investment_id', time_col='time_id'):
+        self.clear()
+        self.spliter_test.split(outsample, inv_col=inv_col, time_col=time_col)
+
+    def get_folder(self, insample, outsample, folder_idx):
+        if folder_idx == 0:
+            outsample_pred, _ = self.spliter_test.get_folder(outsample, folder_idx=0)
+            return insample, outsample_pred
+        else:
+            train_df, outsample_pred = self.spliter_test.get_folder(outsample, folder_idx=folder_idx-1)
+            train_df = pd.concat([insample, train_df], axis=0)
+            return train_df, outsample_pred
+
+
 """
     Introduction of QuantTimeSplit For DataFrame.
 
@@ -418,14 +485,4 @@ class QuantTimeSplit_PreprocessSplit:
 """
 
 if __name__ == "__main__":
-    from quant_finance_research.utils import get_example_df
-
-    df_t, x_column, y_column = get_example_df()
-    fsplit = QuantTimeSplit_SeqHorizon(k=3)
-    # fsplit = QuantTimeSplit_SeqPast(k=3)
-    # fsplit = QuantTimeSplit_GroupTime(k=4)
-    # fsplit = QuantTimeSplit_PurgeSeqHorizon(k=2, gap=1)
-    # fsplit = QuantTimeSplit_PurgeSeqPast(k=2, gap=1)
-    # fsplit = QuantTimeSplit_PurgeGroupTime(k=4, gap=1)
-    fsplit.split(df_t)
-    fidx = 2
+    pass

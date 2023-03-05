@@ -24,6 +24,7 @@ class GBDTWrapper:
     def __init__(self, gbdt, seed=0):
         self.gbdt = gbdt
         self.gbdt.random_state = seed
+        self.n_feature = None
 
     def train(self, train_df, val_df, df_column,
               inv_col='investment_id', time_col='time_id',
@@ -31,6 +32,7 @@ class GBDTWrapper:
               verbose=0,
               **kwargs):
         xtrain, ytrain, xval, yval = get_numpy_from_df_train_val(train_df, val_df, df_column)
+        self.n_feature = xtrain.shape[1:]
         ytrain = ytrain.reshape(-1)
         yval = yval.reshape(-1)
         if isinstance(self.gbdt, LGBMModel):
@@ -49,6 +51,9 @@ class GBDTWrapper:
 
     def predict(self, test_df, df_column, inv_col='investment_id', time_col='time_id', ):
         xtest = test_df.iloc[:, df_column['x']].values
+        if (self.n_feature is not None) and (xtest.shape[1:] != self.n_feature):
+            raise ValueError(f"The Train Feature Dim={self.n_feature}, But the Test Feature Dim={xtest.shape[1:]}. "
+                             f"They should be the same.")
         pred = self.gbdt.predict(xtest)
         return pred
 
@@ -123,7 +128,10 @@ class GBDTCVEnsemble(GBDTEnsembleBase):
         pred_list = []
         for i in range(self.k):
             if spliter is not None:
-                xtest_df, _ = spliter.get_folder_preprocess(test_df, i)
+                if hasattr(spliter, "get_folder_preprocess"):
+                    xtest_df, _ = spliter.get_folder_preprocess(test_df, i)
+                else:
+                    xtest_df = test_df
                 if hasattr(spliter, "get_folder_preprocess_package"):
                     pro_package = spliter.get_folder_preprocess_package(i)
                     df_column = update_df_column_package(df_column, pro_package)

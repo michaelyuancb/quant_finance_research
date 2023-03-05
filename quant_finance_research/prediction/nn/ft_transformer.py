@@ -92,8 +92,6 @@ class FT_Transformer(nn.Module):
                  # str in ['layerwise', 'headwise', 'key-value']
                  ) -> None:
 
-        assert (kv_compression_rate is None) ^ (kv_compression_sharing is not None)
-
         super(FT_Transformer, self).__init__()
         self.tokenizer = CLS_Embedding(d_feat=input_dim, d_token=token_dim, index_num=index_num, index_cat=index_cat,
                                        total_n_cat=total_n_cat, use_bias=use_token_bias,

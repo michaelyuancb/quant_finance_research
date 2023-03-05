@@ -154,7 +154,7 @@ def get_example_df():
 def get_example_large_df():
     v, dt = _get_example_vdt_base()
     n = len(dt)
-    extra_x = np.random.randn(n, 201)
+    extra_x = np.random.randn(n, 197+1)
     v = np.concatenate([v, extra_x], axis=1)
     np.random.seed(0)
     weight = np.array([0.1, 0.05, 0.05, 0.1, 0.2, 0.02, 0.08, 0.15, 0.05, 0.1, 0.04, 0.06]).reshape(-1, 1)
