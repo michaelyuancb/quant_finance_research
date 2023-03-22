@@ -94,13 +94,14 @@ class QuantTimeSplit_NormalTimeCut(QuantSplit_Base):
         [A B C D E F G H I | J K L] ===> (A B C D E F G H I), (J K L)
     """
 
-    def __init__(self, val_ratio):
+    def __init__(self, val_ratio, purge=0):
         """
         :param val_ratio: the ratio of validation set.
         """
         k = 1
         super(QuantTimeSplit_NormalTimeCut, self).__init__(k)
         self.val_ratio = val_ratio
+        self.purge = purge
 
     def split(self, df, inv_col='investment_id', time_col='time_id', **kwargs):
         self.clear()
@@ -108,10 +109,12 @@ class QuantTimeSplit_NormalTimeCut(QuantSplit_Base):
         time_idx = np.sort(np.unique(time_idx))
         n_time_idx = len(time_idx)
         n_train = int(n_time_idx * (1.0 - self.val_ratio))
+        if n_train <= self.purge:
+            raise ValueError(f"n_train={n_train}, purge={self.purge} ; it should be n_train > purge")
         n_test = n_time_idx - n_train
         print(f"Total TimeStampNum={n_time_idx}, Train TimeStampNum={n_train}, Val TimeStampNum={n_test}")
         self.seq_time = [time_idx[0], time_idx[n_train]] + ['+inf_time']
-        idx_train = df[df[time_col] < self.seq_time[1]].index
+        idx_train = df[df[time_col] < time_idx[n_train - self.purge]].index
         idx_val = df[df[time_col] >= self.seq_time[1]].index
         self.split_idx.append((idx_train, idx_val))
 
@@ -427,8 +430,8 @@ class QuantTimeSplit_RollingPredict:
         is TrainingSet={insample_df}, TestSet={outsample_df_test[1/k]}
     """
     def __init__(self, k):
-        assert k > 1
-        self.spliter_test = QuantTimeSplit_SeqPast(k=k-1)
+        if k > 1:
+            self.spliter_test = QuantTimeSplit_SeqPast(k=k-1)
         self.k = k
 
     def get_k(self):
@@ -441,10 +444,15 @@ class QuantTimeSplit_RollingPredict:
         self.spliter_test.reset(k)
 
     def split(self, insample, outsample, inv_col='investment_id', time_col='time_id'):
-        self.clear()
-        self.spliter_test.split(outsample, inv_col=inv_col, time_col=time_col)
+        if self.k > 1:
+            self.clear()
+            self.spliter_test.split(outsample, inv_col=inv_col, time_col=time_col)
+        else:
+            pass
 
     def get_folder(self, insample, outsample, folder_idx):
+        if self.k == 1:
+            return insample, outsample
         if folder_idx == 0:
             outsample_pred, _ = self.spliter_test.get_folder(outsample, folder_idx=0)
             return insample, outsample_pred

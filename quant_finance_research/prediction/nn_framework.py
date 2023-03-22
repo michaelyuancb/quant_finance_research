@@ -8,6 +8,7 @@ import time
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
+from quant_finance_research.prediction.nn_tool import TabDataset, TabLossDataset
 from quant_finance_research.prediction.prediction_utils import *
 from quant_finance_research.utils import save_pickle, load_pickle
 from quant_finance_research.fe.fe_utils import update_df_column_package
@@ -19,38 +20,6 @@ def dnn_set_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
     torch.backends.cudnn.deterministic = True
-
-
-def _transform_ndim_1(x):
-    if x.ndim == 1:
-        return x.reshape(-1, 1)
-    else:
-        return x
-
-
-class TabDataset(Dataset):
-    def __init__(self, x, y):
-        self.x = torch.tensor(_transform_ndim_1(x)).float()
-        self.y = torch.tensor(_transform_ndim_1(y)).float()
-
-    def __getitem__(self, index):
-        return self.x[index], self.y[index]
-
-    def __len__(self):
-        return self.x.shape[0]
-
-
-class TabLossDataset(Dataset):
-    def __init__(self, x, y, help_loss):
-        self.x = torch.tensor(_transform_ndim_1(x)).float()
-        self.y = torch.tensor(_transform_ndim_1(y)).float()
-        self.help_loss = torch.tensor(_transform_ndim_1(help_loss))
-
-    def __getitem__(self, index):
-        return self.x[index], self.y[index], self.help_loss[index]
-
-    def __len__(self):
-        return self.x.shape[0]
 
 
 class NeuralNetworkWrapper:

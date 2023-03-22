@@ -29,7 +29,7 @@ def evaluate_RMSE(pred, label, need_reshape=True):
 def evaluate_IC(pred, label, need_reshape=True):
     if need_reshape:
         pred, label = pred.reshape(-1), label.reshape(-1)
-    df = evaluate_build(pred, label)
+    df = evaluate_build(pred, label).astype("float")
     icv = df.corr(method='pearson').iloc[0, 1]
     return icv
 
@@ -37,7 +37,7 @@ def evaluate_IC(pred, label, need_reshape=True):
 def evaluate_RankIC(pred, label, need_reshape=True):
     if need_reshape:
         pred, label = pred.reshape(-1), label.reshape(-1)
-    df = evaluate_build(pred, label)
+    df = evaluate_build(pred, label).astype("float")
     icv = df.corr(method='spearman').iloc[0, 1]
     return icv
 

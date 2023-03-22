@@ -32,6 +32,11 @@ class GBDTWrapper:
               verbose=0,
               **kwargs):
         xtrain, ytrain, xval, yval = get_numpy_from_df_train_val(train_df, val_df, df_column)
+        if (xtrain.shape[1] != xval.shape[1]) or (ytrain.shape[1] != 1 and ytrain.ndim == 2) or \
+                (yval.shape[1] != 1 and yval.ndim == 2) or (xtrain.shape[0] != ytrain.shape[0]) or \
+                (xval.shape[0] != yval.shape[0]):
+            raise ValueError(f"The shape of data is illegal ; xtrain.shape={xtrain.shape}, ytrain.shape={ytrain.shape},"
+                             f"xval.shape={xval.shape}, yval.shape={yval.shape}")
         self.n_feature = xtrain.shape[1:]
         ytrain = ytrain.reshape(-1)
         yval = yval.reshape(-1)

@@ -9,9 +9,11 @@ from quant_finance_research.utils import *
 
 def debug_delete_Feature():
     df, df_column = get_example_df()
+    dfval = df.copy()
     column = [2]
     print(df)
     df2, pro = delete_Feature(df, df_column, column)
+    assert(df.values == dfval.values).all()
     print(df2)
     print(pro)
     df3, _ = delete_Feature(df, df_column, column, **pro)
@@ -21,12 +23,12 @@ def debug_delete_Feature():
 
 def debug_delete_NanRatio_Feature():
     df, df_column = get_example_df()
+    dfval = df.copy()
     for j in range(8):
         df.iloc[j, 2] = np.nan
     column = df_column['x']
     print(df)
     df2, pro = delete_NanRatio_Feature(df, df_column, column, del_nan_ratio=0.3)
-    print(df2)
     print(pro)
     df3, _ = delete_NanRatio_Feature(df, df_column, column, **pro)
     assert (df3.values == df2.values).all()
@@ -87,8 +89,8 @@ def debug_build_portfolio():
 
 if __name__ == "__main__":
     # debug_delete_Feature()
-    # debug_delete_NanRatio_Feature()
+    debug_delete_NanRatio_Feature()
     # debug_find_GlobalAbsIcRank()
     # debug_add_LocalTimeMeanFactor()
     # debug_add_GlobalAbsIcRank_LocalTimeMeanFactor()
-    debug_build_portfolio()
+    # debug_build_portfolio()
